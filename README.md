@@ -2,11 +2,11 @@
 ## Finetune ModelScope's Text To Video model using Diffusers 🧨 
 ***(This is a WIP)***
 
-
-https://user-images.githubusercontent.com/59846140/227371625-07f0ecb7-fed3-49f4-99a4-e5d5abd05a57.mp4
+![output](https://user-images.githubusercontent.com/59846140/227372411-9fca2015-ba02-48fa-a567-1430e9fc72a7.gif)
 
 *a small cute dragon sitting on a tree branch in a city, realistc, render, cyberpunk, steampunk*
-*Trained on a bird for 1100 steps with last attention layers unfrozen*
+
+*Trained on a single video of bird for 1100 steps with last attention layers unfrozen.*
 
 
 ## Getting Started
