@@ -5,7 +5,7 @@ train_text_encoder: False
 train_data:
   json_path: ""
   preprocessed: True
-  n_sample_frames: 6
+  n_sample_frames: 8
   shuffle_frames: False
   width: 256      
   height: 256
@@ -32,8 +32,8 @@ max_train_steps: 1200
 checkpointing_steps: 1201
 validation_steps: 100
 trainable_modules:
-  - "attn1"
-  - "attn2"
+  - "attn1.to_out"
+  - "attn2.to_out"
 seed: 64
 mixed_precision: "fp16"
 use_8bit_adam: False # This seems to be incompatible at the moment. 
