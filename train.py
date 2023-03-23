@@ -324,23 +324,6 @@ def main(
     global_step = 0
     first_epoch = 0
 
-    # Potentially load in the weights and states from a previous save
-    if resume_from_checkpoint:
-        if resume_from_checkpoint != "latest":
-            path = os.path.basename(resume_from_checkpoint)
-        else:
-            # Get the most recent checkpoint
-            dirs = os.listdir(output_dir)
-            dirs = [d for d in dirs if d.startswith("checkpoint")]
-            dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
-            path = dirs[-1]
-        accelerator.print(f"Resuming from checkpoint {path}")
-        accelerator.load_state(os.path.join(output_dir, path))
-        global_step = int(path.split("-")[1])
-
-        first_epoch = global_step // num_update_steps_per_epoch
-        resume_step = global_step % num_update_steps_per_epoch
-
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
@@ -393,6 +376,7 @@ def main(
     for epoch in range(first_epoch, num_train_epochs):
         train_loss = 0.0
         unet.train()
+        
         for step, batch in enumerate(train_dataloader):
             # Skip steps until we reach the resumed step
             if resume_from_checkpoint and epoch == first_epoch and step < resume_step:
@@ -435,9 +419,22 @@ def main(
                 train_loss = 0.0
             
                 if global_step % checkpointing_steps == 0:
+                    
                     save_path = os.path.join(output_dir, f"checkpoint-{global_step}")
-                    accelerator.save_state(save_path)
-                    logger.info(f"Saved state to {save_path}")
+                    os.makedirs(save_path, exist_ok=True)
+                    unet = accelerator.unwrap_model(unet)
+
+                    pipeline = TextToVideoSDPipeline.from_pretrained(
+                        pretrained_model_path,
+                        text_encoder=text_encoder,
+                        vae=vae,
+                        unet=unet,
+                    )
+                    
+                    pipeline.save_pretrained(save_path)
+                    logger.info(f"Saved model at {save_path} on step {global_step}")
+
+                    del pipeline
 
                 if should_sample(global_step, validation_steps, validation_data):
                     if global_step == 1: print("Performing validation prompt.")
