@@ -51,7 +51,7 @@ class VideoDataset(Dataset):
 
     def load_from_json(self, path):
         # Don't load a JSON file if we're doing single video training
-        if os.path.exists(single_video_path): return
+        if os.path.exists(self.single_video_path): return
 
         try:
             print(f"Loading JSON from {path}")
