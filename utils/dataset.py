@@ -1,3 +1,4 @@
+import os
 import decord
 import numpy as np
 import random
@@ -23,11 +24,17 @@ class VideoDataset(Dataset):
             preprocessed: bool = False,
             shuffle_frames: bool = False,
             use_vision_model: bool = False,
+            single_video_path: str = "",
+            single_video_prompt: str = "",
             **kwargs
     ):
 
         self.tokenizer = tokenizer
         self.preprocessed = preprocessed
+
+        self.single_video_path = single_video_path
+        self.single_video_prompt = single_video_prompt
+
         self.train_data = self.load_from_json(json_path)
         self.vid_data_key = vid_data_key
         self.shuffle_frames = shuffle_frames
@@ -43,6 +50,9 @@ class VideoDataset(Dataset):
         self.sample_frame_rate_init = sample_frame_rate
 
     def load_from_json(self, path):
+        # Don't load a JSON file if we're doing single video training
+        if os.path.exists(single_video_path): return
+
         try:
             print(f"Loading JSON from {path}")
             with open(path) as jpath:
@@ -78,41 +88,81 @@ class VideoDataset(Dataset):
         return prompt_ids
 
     def __len__(self):
-        return len(self.train_data['data'])
+        if self.train_data is not None:
+            return len(self.train_data['data'])
+        else:
+            return 1
 
     def __getitem__(self, index):
         
-        # Assign train data
-        train_data = self.train_data['data'][index]
+        # Initialize variables
+        video = None
+        prompt = None
+        prompt_ids = None
 
-        # load and sample video frames
-        vr = decord.VideoReader(train_data[self.vid_data_key], width=self.width, height=self.height)
+        # Check if we're doing single video training
+        if os.path.exists(self.single_video_path):
+            train_data = self.single_video_path
 
-        # Pick a random video from the dataset
-        vid_data = random.choice(train_data['data'])
+            # Load and sample video frames
+            vr = decord.VideoReader(train_data, width=self.width, height=self.height)
 
-        # Set a variable framerate between 1 and 30 FPS 
-        random.seed()
-        self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
+            # Randomize the frame rate at different speeds
+            self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
 
-        # Perform frame shuffling if enabled.
-        if self.shuffle_frames:
-            self.sample_start_idx = random.randint(1, len(vr))
-            if self.sample_start_idx >= abs(len(vr) - 480):
-                self.sample_start_idx = 1
-            idx = self.sample_start_idx
+            # Randomize start frame so that we can train over multiple parts of the video
+            random.seed()
+            max_sample_rate = abs((self.n_sample_frames - self.sample_frame_rate) + 2)
+            max_frame = abs(len(vr) - max_sample_rate)
+            idx = random.randint(1, max_frame)
+
+            # Check if idx is greater than the length of the video.
+            if idx >= len(vr):
+                idx = 1
+                
+            # Resolve sample index
+            sample_index = list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
+
+            # Process video and rearrange
+            video = vr.get_batch(sample_index)
+            video = rearrange(video, "f h w c -> f c h w")
+
+            prompt = self.single_video_prompt
+            prompt_ids = self.get_prompt_ids(prompt)
+        
+        # Use default JSON training
         else:
-            idx = vid_data['frame_index']
-        
-        # Get video prompt
-        prompt = vid_data['prompt']
-        
-        sample_index = list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
+            # Assign train data
+            train_data = self.train_data['data'][index]
 
-        video = vr.get_batch(sample_index)
-        video = rearrange(video, "f h w c -> f c h w")
+            # load and sample video frames
+            vr = decord.VideoReader(train_data[self.vid_data_key], width=self.width, height=self.height)
 
-        prompt_ids = self.get_prompt_ids(prompt)
+            # Pick a random video from the dataset
+            vid_data = random.choice(train_data['data'])
+
+            # Set a variable framerate between 1 and 30 FPS 
+            random.seed()
+            self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
+
+            # Perform frame shuffling if enabled.
+            if self.shuffle_frames:
+                self.sample_start_idx = random.randint(1, len(vr))
+                if self.sample_start_idx >= abs(len(vr) - 480):
+                    self.sample_start_idx = 1
+                idx = self.sample_start_idx
+            else:
+                idx = vid_data['frame_index']
+            
+            # Get video prompt
+            prompt = vid_data['prompt']
+            
+            sample_index = list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
+
+            video = vr.get_batch(sample_index)
+            video = rearrange(video, "f h w c -> f c h w")
+
+            prompt_ids = self.get_prompt_ids(prompt)
 
         example = {
             "pixel_values": (video / 127.5 - 1.0),

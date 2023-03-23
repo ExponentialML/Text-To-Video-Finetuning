@@ -2,6 +2,13 @@
 ## Finetune ModelScope's Text To Video model using Diffusers 🧨 
 ***(This is a WIP)***
 
+![output](https://user-images.githubusercontent.com/59846140/227372411-9fca2015-ba02-48fa-a567-1430e9fc72a7.gif)
+
+*a small cute dragon sitting on a tree branch in a city, realistc, render, cyberpunk, steampunk*
+
+*Trained on a single video of bird for 1100 steps with last attention layers unfrozen.*
+
+
 ## Getting Started
 ### Requirements
 
@@ -82,6 +89,11 @@ train_data:
   
   # The key of the video data name. This is to align with any preprocess script changes.
   vid_data_key: "video_path"
+
+  # The video path and prompt for that video for single video training.
+  # If enabled, JSON path is ignored
+  single_video_path: ""
+  single_video_prompt: ""
 
 # This is the data for validation during training. Prompt will override training data prompts.
   sample_preview: True

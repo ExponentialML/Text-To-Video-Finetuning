@@ -3,7 +3,7 @@ output_dir: "./outputs"
 train_text_encoder: False
 
 train_data:
-  json_path: "./json/train.json"
+  json_path: ""
   preprocessed: True
   n_sample_frames: 6
   shuffle_frames: False
@@ -12,12 +12,12 @@ train_data:
   sample_start_idx: 0
   sample_frame_rate: 15
   vid_data_key: "video_path"
-
-  single_video_path: ""
-  single_video_prompt: ""
+  
+  single_video_path: "data/bird-46026.mp4"
+  single_video_prompt: "a bird in a beautiful forest"
 
 validation_data:
-  prompt: ""
+  prompt: "a small cute dragon sitting on a tree branch in a city, realistc, render, cyberpunk, steampunk" 
   sample_preview: True
   num_frames: 16
   width: 256
@@ -28,8 +28,8 @@ validation_data:
 learning_rate: 5e-6 
 adam_weight_decay: 1e-2
 train_batch_size: 1
-max_train_steps: 50000
-checkpointing_steps: 5000
+max_train_steps: 1200
+checkpointing_steps: 1201
 validation_steps: 100
 trainable_modules:
   - "attn1"
