@@ -23,6 +23,7 @@ pip install transformers
 pip install einops
 pip install decord
 pip install tqdm
+pip install safetensors
 ```
 
 ### Models
