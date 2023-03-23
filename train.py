@@ -30,6 +30,7 @@ from diffusers import DPMSolverMultistepScheduler, DDPMScheduler, TextToVideoSDP
 from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version, export_to_video
 from diffusers.utils.import_utils import is_xformers_available
+from xformers.ops import MemoryEfficientAttentionFlashAttentionOp
 
 
 from transformers import CLIPTextModel, CLIPTokenizer
@@ -86,7 +87,7 @@ def freeze_models(models_to_freeze):
 def handle_xformers(enable_xformers_memory_efficient_attention, unet):
     if enable_xformers_memory_efficient_attention:
         if is_xformers_available():
-            unet.enable_xformers_memory_efficient_attention()
+            unet.enable_xformers_memory_efficient_attention(attention_op=MemoryEfficientAttentionFlashAttentionOp)
         else:
             raise ValueError("xformers is not available. Make sure it is installed correctly")
 
@@ -229,7 +230,7 @@ def main(
     freeze_models([vae, text_encoder, unet])
     
     # Enable xformers if available
-    #handle_xformers(enable_xformers_memory_efficient_attention, unet)
+    handle_xformers(enable_xformers_memory_efficient_attention, unet)
 
     if scale_lr:
         learning_rate = (
