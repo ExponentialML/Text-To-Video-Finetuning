@@ -34,6 +34,10 @@ python train.py --config ./configs/my_config.yaml
 ## Preprocessing your data
 All videos were preprocessed using the script [here](https://github.com/ExponentialML/Video-BLIP2-Preprocessor) using automatic BLIP2 captions. Please follow the instructions there.
 
+If you wish to use a custom dataloader (for instance, a folder of mp4's and captions), you're free to update the dataloader [here](https://github.com/ExponentialML/Text-To-Video-Finetuning/blob/d72e34cfbd91d2a62c07172f9ef079ca5cd651b2/utils/dataset.py#L83). 
+
+Feel free to share your dataloaders for others to use! It would be much appreciated.
+
 ## Configuration
 The configuration uses a YAML config borrowed from [Tune-A-Video](https://github.com/showlab/Tune-A-Video) reposotories. Here's the gist of how it works.
 
