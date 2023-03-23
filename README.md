@@ -82,6 +82,11 @@ train_data:
   # The key of the video data name. This is to align with any preprocess script changes.
   vid_data_key: "video_path"
 
+  # The video path and prompt for that video for single video training.
+  # If enabled, JSON path is ignored
+  single_video_path: ""
+  single_video_prompt: ""
+
 # This is the data for validation during training. Prompt will override training data prompts.
   sample_preview: True
   prompt: ""
