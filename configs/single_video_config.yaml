@@ -17,7 +17,7 @@ train_data:
   single_video_prompt: "a bird in a beautiful forest"
 
 validation_data:
-  prompt: "a small cute dragon sitting on a tree branch in a city, 4k hd" 
+  prompt: "a small cute dragon sitting on a tree branch in a city, realistc, render, cyberpunk, steampunk" 
   sample_preview: True
   num_frames: 16
   width: 256
