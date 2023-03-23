@@ -50,10 +50,10 @@ class VideoDataset(Dataset):
         self.sample_frame_rate_init = sample_frame_rate
 
     def load_from_json(self, path):
-        try:
-            # Don't load a JSON file if we're doing single video training
-            if os.path.exists(single_video_path): return
+        # Don't load a JSON file if we're doing single video training
+        if os.path.exists(single_video_path): return
 
+        try:
             print(f"Loading JSON from {path}")
             with open(path) as jpath:
                 json_data = json.load(jpath)
@@ -88,13 +88,21 @@ class VideoDataset(Dataset):
         return prompt_ids
 
     def __len__(self):
-        return len(self.train_data['data'])
+        if self.train_data is not None:
+            return len(self.train_data['data'])
+        else:
+            return 1
 
     def __getitem__(self, index):
-
+        
+        # Initialize variables
+        video = None
+        prompt = None
+        prompt_ids = None
+        
         # Check if we're doing single video training
         if os.path.exists(self.single_video_path):
-            train_data = single_video_path
+            train_data = self.single_video_path
 
             # Load and sample video frames
             vr = decord.VideoReader(train_data, width=self.width, height=self.height)

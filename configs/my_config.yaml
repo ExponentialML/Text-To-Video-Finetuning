@@ -13,8 +13,8 @@ train_data:
   sample_frame_rate: 15
   vid_data_key: "video_path"
 
-  single_video_path: "",
-  single_video_prompt: "",
+  single_video_path: ""
+  single_video_prompt: ""
 
 validation_data:
   prompt: ""
