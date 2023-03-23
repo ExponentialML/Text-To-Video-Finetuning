@@ -226,7 +226,7 @@ def main(
     noise_scheduler, tokenizer, text_encoder, vae, unet = load_primary_models(pretrained_model_path)
 
     # Freeze any necessary models
-    freeze_models([vae, text_encoder.text_model.encoder, unet])
+    freeze_models([vae, text_encoder, unet])
     
     # Enable xformers if available
     #handle_xformers(enable_xformers_memory_efficient_attention, unet)
@@ -242,7 +242,7 @@ def main(
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
     optim_params = [
         param_optim(unet, trainable_modules is not None),
-        param_optim(text_encoder.text_model.encoder.parameters, train_text_encoder == True),
+        param_optim(text_encoder, train_text_encoder == True),
     ]
     params = create_optimizer_params(optim_params, learning_rate)
     
@@ -281,13 +281,16 @@ def main(
     ).input_ids.to(accelerator.device)
 
     # Prepare everything with our `accelerator`.
-    unet, optimizer,train_dataloader, lr_scheduler, text_encoder.text_model.encoder = accelerator.prepare(
+    unet, optimizer,train_dataloader, lr_scheduler, text_encoder = accelerator.prepare(
         unet, 
         optimizer, 
         train_dataloader, 
         lr_scheduler, 
-        text_encoder.text_model.encoder
+        text_encoder
     )
+    
+    # Enable VAE slicing to save memory.
+    vae.enable_slicing()
 
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
