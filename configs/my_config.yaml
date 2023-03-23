@@ -5,12 +5,12 @@ train_text_encoder: False
 train_data:
   json_path: "./json/train.json"
   preprocessed: True
-  n_sample_frames: 4
+  n_sample_frames: 6
   shuffle_frames: False
   width: 256      
   height: 256
   sample_start_idx: 0
-  sample_frame_rate: 1
+  sample_frame_rate: 15
   vid_data_key: "video_path"
 
 validation_data:
