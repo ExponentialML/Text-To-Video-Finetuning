@@ -41,10 +41,19 @@ Minimum RTX 3090. You're free to open a PR for optimization (please do!), but th
 python train.py --config ./configs/my_config.yaml
 ```
 
+### Finetuning using a training JSON with higher FPS (train last attention layers)
+
+```python
+python train.py --config ./configs/my_config_high_fps.yaml
+```
+
 ### Finetuning on a single video
 ```python
 python train.py --config ./configs/single_video_config.yaml
 ```
+
+#### Note
+You can copy a config and create your own, then call it like `--config ./my_data/custom_config_name.yaml`
 
 ## Preprocessing your data
 All videos were preprocessed using the script [here](https://github.com/ExponentialML/Video-BLIP2-Preprocessor) using automatic BLIP2 captions. Please follow the instructions there.
