@@ -131,7 +131,8 @@ validation_steps: 100
 # The parameters to unfreeze. As it is now, all attention layers are unfrozen. 
 # Unfreezing resnet layers would lead to better quality, but consumes a very large amount of VRAM.
 trainable_modules:
-  - "attentions"
+  - "attn1"
+  - "attn1"
 
 # Seed for sampling validation
 seed: 64
@@ -147,6 +148,17 @@ enable_xformers_memory_efficient_attention: True
 
 ```
   </details>
+
+## Trainable modules (Advanced Usage)
+The `trainable_modules` parameter are a set list by the user that tells the model which layers to unfreeze. 
+
+Typically you want to train the cross attention layers. The more layers you unfreeze, the higher the VRAM usage. Typically in my testing, here is what I see.
+
+`"attentions"`: Uses a lot of VRAM, but high probability for quality.
+
+`"attn1", "attn2"`: Uses a good amount of VRAM, but allows for processing more frames. Good quality finetunes can happen with these settings.
+
+`"attn1.to_out", "attn2.to_out"`: This only trains the linears on on the cross attention layers. This seems to be a good tradeoff for VRAM with great results.
 
 ## Running
 After training, you can easily run your model by doing the following.
