@@ -14,12 +14,13 @@ train_data:
   vid_data_key: "video_path"
 
 validation_data:
+  prompt: ""
   sample_preview: True
-  video_length: 16
+  num_frames: 16
   width: 256
   height: 256
   num_inference_steps: 50
-  guidance_scale: 12.5
+  guidance_scale: 9
 
 learning_rate: 5e-6 
 adam_weight_decay: 1e-2

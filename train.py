@@ -447,12 +447,22 @@ def main(
                                 vae=vae,
                                 unet=unet
                             )
+
                             diffusion_scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
                             pipeline.scheduler = diffusion_scheduler
 
                             out_file = f"{output_dir}/samples/{global_step}_{text_prompt}.mp4"
-                            video_frames = pipeline(text_prompt).frames
+                            prompt = text_prompt if len(validation_data.prompt) <= 0 else prompt
+                            
+                            video_frames = pipeline(
+                                prompt,
+                                width=validation_data.width,
+                                height=validation_data.height,
+                                num_frames=validation_data.num_frames,
+                                guidance_scale=validation_data.guidance_scale
+                            ).frames
                             video_path = export_to_video(video_frames, out_file)
+
                             del pipeline
                             gc.collect()
 
