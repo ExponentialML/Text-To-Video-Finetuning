@@ -1,5 +1,6 @@
 # Text-To-Video-Finetuning
-## Finetune ModelScope's Text To Video model using Diffusers 🧨 ***(This is a WIP)***
+## Finetune ModelScope's Text To Video model using Diffusers 🧨 
+***(This is a WIP)***
 
 ## Getting Started
 ### Requirements
