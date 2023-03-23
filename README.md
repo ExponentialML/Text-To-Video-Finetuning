@@ -131,7 +131,7 @@ import torch
 from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
 from diffusers.utils import export_to_video
 
-my_trained_model_path = "./trained_model_path/
+my_trained_model_path = "./trained_model_path/"
 pipe = DiffusionPipeline.from_pretrained(my_trained_model_path, torch_dtype=torch.float16, variant="fp16")
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 pipe.enable_model_cpu_offload()
