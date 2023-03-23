@@ -35,8 +35,15 @@ This repository was only tested with **FP16** safetensors. Other files (bin, FP3
 Minimum RTX 3090. You're free to open a PR for optimization (please do!), but this is heavy without gradient checkpointing support.
 
 ## Usage
+### Finetuning using a training JSON
+
 ```python
 python train.py --config ./configs/my_config.yaml
+```
+
+### Finetuning on a single video
+```python
+python train.py --config ./configs/single_video_config.yaml
 ```
 
 ## Preprocessing your data
