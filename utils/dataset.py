@@ -9,16 +9,13 @@ decord.bridge.set_bridge('torch')
 from torch.utils.data import Dataset
 from einops import rearrange
 
-def clamp(n, minn, maxn):
-    return max(min(maxn, n), minn)
-
 class VideoDataset(Dataset):
     def __init__(
             self,
             tokenizer = None,
             width: int = 256,
             height: int = 256,
-            n_sample_frames: int = 8,
+            n_sample_frames: int = 4,
             sample_start_idx: int = 0,
             sample_frame_rate: int = 1,
             json_path: str ="./data",
