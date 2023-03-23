@@ -1,0 +1,39 @@
+pretrained_model_path: "./models/model_scope_diffusers/" #https://huggingface.co/damo-vilab/text-to-video-ms-1.7b/tree/main
+output_dir: "./outputs"
+train_text_encoder: False
+
+train_data:
+  json_path: "./json/train.json"
+  preprocessed: True
+  n_sample_frames: 24
+  shuffle_frames: False
+  width: 256      
+  height: 256
+  sample_start_idx: 0
+  sample_frame_rate: 15
+  vid_data_key: "video_path"
+
+  single_video_path: ""
+  single_video_prompt: ""
+
+validation_data:
+  prompt: ""
+  sample_preview: True
+  num_frames: 16
+  width: 256
+  height: 256
+  num_inference_steps: 50
+  guidance_scale: 9
+
+learning_rate: 5e-6 
+adam_weight_decay: 1e-2
+train_batch_size: 1
+max_train_steps: 50000
+checkpointing_steps: 5000
+validation_steps: 100
+trainable_modules:
+  - "attentions.2."
+seed: 64
+mixed_precision: "fp16"
+use_8bit_adam: False # This seems to be incompatible at the moment. 
+enable_xformers_memory_efficient_attention: True
