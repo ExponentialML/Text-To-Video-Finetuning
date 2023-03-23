@@ -26,6 +26,10 @@ pip install tqdm
 pip install safetensors
 ```
 
+You could potentially save memory by installing xformers and enabling it in your config. Please follow the instructions at the following repository for details on how to install.
+
+https://github.com/facebookresearch/xformers
+
 ### Models
 The models were downloaded from here https://huggingface.co/damo-vilab/text-to-video-ms-1.7b/tree/main.
 
