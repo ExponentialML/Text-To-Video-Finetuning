@@ -158,7 +158,7 @@ Typically you want to train the cross attention layers. The more layers you unfr
 
 `"attn1", "attn2"`: Uses a good amount of VRAM, but allows for processing more frames. Good quality finetunes can happen with these settings.
 
-`"attn1.to_out", "attn2.to_out"`: This only trains the linears on on the cross attention layers. This seems to be a good tradeoff for VRAM with great results.
+`"attn1.to_out", "attn2.to_out"`: This only trains the linears on on the cross attention layers. This seems to be a good tradeoff for VRAM with great results with a learning rate of 1e-4.
 
 ## Running
 After training, you can easily run your model by doing the following.
