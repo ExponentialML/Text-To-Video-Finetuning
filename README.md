@@ -6,6 +6,10 @@
 ### Requirements
 
 ```bash
+https://github.com/ExponentialML/Video-BLIP2-Preprocessor.git
+```
+
+```bash
 pip install torch torchvision torchaudio
 pip install git+https://github.com/huggingface/diffusers.git
 pip install transformers
