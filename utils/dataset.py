@@ -25,7 +25,7 @@ class VideoDataset(Dataset):
             shuffle_frames: bool = False,
             use_vision_model: bool = False,
             single_video_path: str = "",
-            single_video_prompt: str = ""
+            single_video_prompt: str = "",
             **kwargs
     ):
 
