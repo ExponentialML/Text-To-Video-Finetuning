@@ -82,14 +82,14 @@ train_data:
   # The key of the video data name. This is to align with any preprocess script changes.
   vid_data_key: "video_path"
 
-# Only sample_preview is used. This is used for validation prompts, but is read by the training json by default.
-validation_data:
+# This is the data for validation during training. Prompt will override training data prompts.
   sample_preview: True
-  video_length: 16
+  prompt: ""
+  num_frames: 16
   width: 256
   height: 256
   num_inference_steps: 50
-  guidance_scale: 12.5
+  guidance_scale: 9
 
 # Training parameters
 learning_rate: 5e-6
