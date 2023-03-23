@@ -118,3 +118,21 @@ enable_xformers_memory_efficient_attention: True
 
 ```
   </details>
+
+## Running
+After training, you can easily run your model by doing the following.
+
+```python
+import torch
+from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
+from diffusers.utils import export_to_video
+
+my_trained_model_path = "./trained_model_path/
+pipe = DiffusionPipeline.from_pretrained(my_trained_model_path, torch_dtype=torch.float16, variant="fp16")
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+pipe.enable_model_cpu_offload()
+
+prompt = "Your prompt based on train data"
+video_frames = pipe(prompt, num_inference_steps=25).frames
+video_path = export_to_video(video_frames)
+```
