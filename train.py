@@ -453,7 +453,7 @@ def main(
                             diffusion_scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
                             pipeline.scheduler = diffusion_scheduler
 
-                            out_file = f"{output_dir}/samples/{text_prompt}_{global_step}.mp4"
+                            out_file = f"{output_dir}/samples/{global_step}_{text_prompt}.mp4"
                             video_frames = pipeline(text_prompt).frames
                             video_path = export_to_video(video_frames, out_file)
                             del pipeline
