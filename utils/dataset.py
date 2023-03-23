@@ -99,15 +99,31 @@ class VideoDataset(Dataset):
         video = None
         prompt = None
         prompt_ids = None
-        
+
         # Check if we're doing single video training
         if os.path.exists(self.single_video_path):
             train_data = self.single_video_path
 
             # Load and sample video frames
             vr = decord.VideoReader(train_data, width=self.width, height=self.height)
+
+            # Randomize the frame rate at different speeds
+            self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
+
+            # Randomize start frame so that we can train over multiple parts of the video
+            random.seed()
+            max_sample_rate = abs((self.n_sample_frames - self.sample_frame_rate) + 2)
+            max_frame = abs(len(vr) - max_sample_rate)
+            idx = random.randint(1, max_frame)
+
+            # Check if idx is greater than the length of the video.
+            if idx >= len(vr):
+                idx = 1
+                
+            # Resolve sample index
             sample_index = list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
 
+            # Process video and rearrange
             video = vr.get_batch(sample_index)
             video = rearrange(video, "f h w c -> f c h w")
 
