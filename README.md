@@ -6,7 +6,7 @@
 ### Requirements
 
 ```bash
-https://github.com/ExponentialML/Video-BLIP2-Preprocessor.git
+git clone https://github.com/ExponentialML/Text-To-Video-Finetuning.git
 ```
 
 ```bash
