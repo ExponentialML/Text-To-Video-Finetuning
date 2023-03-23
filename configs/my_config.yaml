@@ -5,7 +5,7 @@ train_text_encoder: False
 train_data:
   json_path: "./json/train.json"
   preprocessed: True
-  n_sample_frames: 6
+  n_sample_frames: 8
   shuffle_frames: False
   width: 256      
   height: 256
