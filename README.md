@@ -20,6 +20,8 @@ git clone https://github.com/ExponentialML/Text-To-Video-Finetuning.git
 pip install -r requirements.txt
 ```
 
+All code was tested on Python 3.10.9 & Torch version 1.13.1.
+
 You could potentially save memory by installing xformers and enabling it in your config. Please follow the instructions at the following repository for details on how to install.
 
 https://github.com/facebookresearch/xformers
