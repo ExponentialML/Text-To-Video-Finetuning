@@ -1,0 +1,8 @@
+accelerate
+torch torchvision torchaudio
+git+https://github.com/huggingface/diffusers.git
+transformers
+einops
+ecord
+tqdm
+safetensors
