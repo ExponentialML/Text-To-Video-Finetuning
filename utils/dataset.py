@@ -21,6 +21,7 @@ class VideoDataset(Dataset):
             sample_frame_rate: int = 1,
             json_path: str ="./data",
             vid_data_key: str = "video_path",
+            use_random_start_idx: bool = False,
             preprocessed: bool = False,
             single_video_path: str = "",
             single_video_prompt: str = "",
@@ -37,6 +38,7 @@ class VideoDataset(Dataset):
         self.vid_data_key = vid_data_key
         self.sample_iters = 0
         self.original_start_idx = sample_start_idx
+        self.use_random_start_idx = use_random_start_idx
 
         self.width = width
         self.height = height
@@ -84,15 +86,25 @@ class VideoDataset(Dataset):
 
         return prompt_ids
 
-    def get_vid_idx(self, vr):
-        # Randomize the frame rate at different speeds
-        self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
+    def get_vid_idx(self, vr, vid_data=None):
 
-        # Randomize start frame so that we can train over multiple parts of the video
-        random.seed()
-        max_sample_rate = abs((self.n_sample_frames - self.sample_frame_rate) + 2)
-        max_frame = abs(len(vr) - max_sample_rate)
-        idx = random.randint(1, max_frame)
+        if self.use_random_start_idx:
+            
+            # Randomize the frame rate at different speeds
+            self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
+
+            # Randomize start frame so that we can train over multiple parts of the video
+            random.seed()
+            max_sample_rate = abs((self.n_sample_frames - self.sample_frame_rate) + 2)
+            max_frame = abs(len(vr) - max_sample_rate)
+            idx = random.randint(1, max_frame)
+            
+        else:
+
+            if vid_data is not None:
+                idx = vid_data['frame_index']
+            else:
+                idx = 1
 
         return idx
 
@@ -145,7 +157,7 @@ class VideoDataset(Dataset):
 
             # Set a variable framerate between 1 and 30 FPS 
 
-            idx = self.get_vid_idx(vr)
+            idx = self.get_vid_idx(vr, vid_data)
 
             # Check if idx is greater than the length of the video.
             if idx >= len(vr):

@@ -10,6 +10,7 @@ train_data:
   height: 256
   sample_start_idx: 0
   sample_frame_rate: 15
+  use_random_start_idx: True
   vid_data_key: "video_path"
   
   single_video_path: "data/bird-46026.mp4"
