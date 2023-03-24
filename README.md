@@ -17,6 +17,7 @@ git clone https://github.com/ExponentialML/Text-To-Video-Finetuning.git
 ```
 
 ```bash
+pip install accelerate
 pip install torch torchvision torchaudio
 pip install git+https://github.com/huggingface/diffusers.git
 pip install transformers
