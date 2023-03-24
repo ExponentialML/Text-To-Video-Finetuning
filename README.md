@@ -46,8 +46,11 @@ python train.py --config ./configs/single_video_config.yaml
 
 ### Training Results
 With a lot of data, you can expect training results to show at roughly 2500 steps at a constant learning rate of 5e-6. 
+Play around with learning rates to see what works best for you (5e-6, 3e-5, 1e-4).
 
 When finetuning on a single video, you should see results in half as many steps.
+
+After training, you should see your results in your output directory. By default, it should be placed at the script root under `./outputs/train_<date>`
 
 ## Preprocessing your data
 All videos were preprocessed using the script [here](https://github.com/ExponentialML/Video-BLIP2-Preprocessor) using automatic BLIP2 captions. Please follow the instructions there.
