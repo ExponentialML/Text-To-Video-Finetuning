@@ -22,7 +22,6 @@ class VideoDataset(Dataset):
             json_path: str ="./data",
             vid_data_key: str = "video_path",
             preprocessed: bool = False,
-            use_vision_model: bool = False,
             single_video_path: str = "",
             single_video_prompt: str = "",
             **kwargs
