@@ -1,8 +1,12 @@
 accelerate
-torch torchvision torchaudio
+torch
+torchvision
+torchaudio
 git+https://github.com/huggingface/diffusers.git
 transformers
 einops
-ecord
+decord
 tqdm
 safetensors
+omegaconf
+opencv-python
