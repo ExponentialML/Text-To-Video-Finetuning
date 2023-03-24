@@ -185,5 +185,7 @@ pipe.enable_model_cpu_offload()
 
 prompt = "Your prompt based on train data"
 video_frames = pipe(prompt, num_inference_steps=25).frames
-video_path = export_to_video(video_frames)
+
+out_file = "./my_video.mp4"
+video_path = export_to_video(video_frames, out_file)
 ```
