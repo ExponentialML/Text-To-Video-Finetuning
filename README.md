@@ -29,6 +29,13 @@ The models were downloaded from here https://huggingface.co/damo-vilab/text-to-v
 
 This repository was only tested with **FP16** safetensors. Other files (bin, FP32) should work fine, but if you have any trouble, refer to this.
 
+If you wish to download all of the models, you can use this command:
+
+```bash
+git lfs install
+git clone https://huggingface.co/damo-vilab/text-to-video-ms-1.7b
+```
+
 ## Hardware
 Minimum RTX 3090. You're free to open a PR for optimization (please do!), but this is heavy without gradient checkpointing support.
 
