@@ -21,9 +21,8 @@ class VideoDataset(Dataset):
             sample_frame_rate: int = 1,
             json_path: str ="./data",
             vid_data_key: str = "video_path",
+            use_random_start_idx: bool = False,
             preprocessed: bool = False,
-            shuffle_frames: bool = False,
-            use_vision_model: bool = False,
             single_video_path: str = "",
             single_video_prompt: str = "",
             **kwargs
@@ -37,9 +36,9 @@ class VideoDataset(Dataset):
 
         self.train_data = self.load_from_json(json_path)
         self.vid_data_key = vid_data_key
-        self.shuffle_frames = shuffle_frames
         self.sample_iters = 0
         self.original_start_idx = sample_start_idx
+        self.use_random_start_idx = use_random_start_idx
 
         self.width = width
         self.height = height
@@ -87,6 +86,28 @@ class VideoDataset(Dataset):
 
         return prompt_ids
 
+    def get_vid_idx(self, vr, vid_data=None):
+
+        if self.use_random_start_idx:
+            
+            # Randomize the frame rate at different speeds
+            self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
+
+            # Randomize start frame so that we can train over multiple parts of the video
+            random.seed()
+            max_sample_rate = abs((self.n_sample_frames - self.sample_frame_rate) + 2)
+            max_frame = abs(len(vr) - max_sample_rate)
+            idx = random.randint(1, max_frame)
+            
+        else:
+
+            if vid_data is not None:
+                idx = vid_data['frame_index']
+            else:
+                idx = 1
+
+        return idx
+
     def __len__(self):
         if self.train_data is not None:
             return len(self.train_data['data'])
@@ -107,14 +128,7 @@ class VideoDataset(Dataset):
             # Load and sample video frames
             vr = decord.VideoReader(train_data, width=self.width, height=self.height)
 
-            # Randomize the frame rate at different speeds
-            self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
-
-            # Randomize start frame so that we can train over multiple parts of the video
-            random.seed()
-            max_sample_rate = abs((self.n_sample_frames - self.sample_frame_rate) + 2)
-            max_frame = abs(len(vr) - max_sample_rate)
-            idx = random.randint(1, max_frame)
+            idx = self.get_vid_idx(vr)
 
             # Check if idx is greater than the length of the video.
             if idx >= len(vr):
@@ -142,22 +156,18 @@ class VideoDataset(Dataset):
             vid_data = random.choice(train_data['data'])
 
             # Set a variable framerate between 1 and 30 FPS 
-            random.seed()
-            self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
 
-            # Perform frame shuffling if enabled.
-            if self.shuffle_frames:
-                self.sample_start_idx = random.randint(1, len(vr))
-                if self.sample_start_idx >= abs(len(vr) - 480):
-                    self.sample_start_idx = 1
-                idx = self.sample_start_idx
-            else:
-                idx = vid_data['frame_index']
+            idx = self.get_vid_idx(vr, vid_data)
+
+            # Check if idx is greater than the length of the video.
+            if idx >= len(vr):
+                idx = 1
+                
+            # Resolve sample index
+            sample_index = list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
             
             # Get video prompt
             prompt = vid_data['prompt']
-            
-            sample_index = list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
 
             video = vr.get_batch(sample_index)
             video = rearrange(video, "f h w c -> f c h w")

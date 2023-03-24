@@ -6,11 +6,11 @@ train_data:
   json_path: "./json/train.json"
   preprocessed: True
   n_sample_frames: 8
-  shuffle_frames: False
   width: 256      
   height: 256
   sample_start_idx: 0
   sample_frame_rate: 15
+  use_random_start_idx: False
   vid_data_key: "video_path"
 
   single_video_path: ""
