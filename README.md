@@ -17,14 +17,7 @@ git clone https://github.com/ExponentialML/Text-To-Video-Finetuning.git
 ```
 
 ```bash
-pip install accelerate
-pip install torch torchvision torchaudio
-pip install git+https://github.com/huggingface/diffusers.git
-pip install transformers
-pip install einops
-pip install decord
-pip install tqdm
-pip install safetensors
+pip install -r requirements.txt
 ```
 
 You could potentially save memory by installing xformers and enabling it in your config. Please follow the instructions at the following repository for details on how to install.
