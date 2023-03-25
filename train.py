@@ -451,14 +451,16 @@ def main(
 
                             prompt = text_prompt if len(validation_data.prompt) <= 0 else validation_data.prompt
                             out_file = f"{output_dir}/samples/{global_step}_{prompt}.mp4"
-
-                            video_frames = pipeline(
-                                prompt,
-                                width=validation_data.width,
-                                height=validation_data.height,
-                                num_frames=validation_data.num_frames,
-                                guidance_scale=validation_data.guidance_scale
-                            ).frames
+                            
+                            with torch.no_grad():
+                                video_frames = pipeline(
+                                    prompt,
+                                    width=validation_data.width,
+                                    height=validation_data.height,
+                                    num_frames=validation_data.num_frames,
+                                    num_inference_steps=validation_data.num_inference_steps,
+                                    guidance_scale=validation_data.guidance_scale
+                                ).frames
                             video_path = export_to_video(video_frames, out_file)
 
                             del pipeline
