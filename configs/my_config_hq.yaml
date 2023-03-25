@@ -5,9 +5,9 @@ train_text_encoder: False
 train_data:
   json_path: "./json/train.json"
   preprocessed: True
-  n_sample_frames: 4
+  n_sample_frames: 2
   shuffle_frames: False
-  width: 256      
+  width: 384      
   height: 256
   sample_start_idx: 0
   sample_frame_rate: 30
@@ -20,7 +20,7 @@ validation_data:
   prompt: ""
   sample_preview: True
   num_frames: 16
-  width: 256
+  width: 384
   height: 256
   num_inference_steps: 50
   guidance_scale: 9
@@ -34,7 +34,6 @@ validation_steps: 100
 trainable_modules:
   - "attn1"
   - "attn2"
-  - "temp_convs"
 seed: 64
 mixed_precision: "fp16"
 use_8bit_adam: False # This seems to be incompatible at the moment. 
