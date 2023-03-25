@@ -387,9 +387,7 @@ def main(
             with accelerator.accumulate(unet) ,accelerator.accumulate(text_encoder.text_model.encoder):
 
                 text_prompt = batch['text_prompt'][0]
-                pixel_values = batch["pixel_values"].to(weight_dtype)
-                video_length = pixel_values.shape[1]
-
+                
                 with accelerator.autocast():
                     loss, latents = finetune_unet(batch, train_encoder=train_text_encoder)
                 
