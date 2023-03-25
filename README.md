@@ -42,16 +42,22 @@ git clone https://huggingface.co/damo-vilab/text-to-video-ms-1.7b
 Minimum RTX 3090. You're free to open a PR for optimization (please do!), but this is heavy without gradient checkpointing support.
 
 ## Usage
-### Finetuning using a training JSON
 
+### Finetuning using a training JSON
 ```python
 python train.py --config ./configs/my_config.yaml
+```
+
+### Finetuning using a training JSON and HQ settings
+```python
+python train.py --config ./configs/my_config_hq.yaml
 ```
 
 ### Finetuning on a single video
 ```python
 python train.py --config ./configs/single_video_config.yaml
 ```
+---
 
 ### Training Results
 With a lot of data, you can expect training results to show at roughly 2500 steps at a constant learning rate of 5e-6. 
