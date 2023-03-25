@@ -85,7 +85,25 @@ class VideoDataset(Dataset):
         ).input_ids
 
         return prompt_ids
+    
+    def get_frame_range(self, idx, vr):
+        return list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
+    
+    def get_sample_idx(self, idx, vr):
+        # Get the frame idx range based on the get_vid_idx function
+        # We have a fallback here just in case we the frame cannot be read
+        sample_idx = self.get_frame_range(idx, vr)
+        fallback = self.get_frame_range(1, vr)
+        
+        # Return the result from the get_vid_idx function. This will error out if it cannot be read.
+        try:
+            vr.get_batch(sample_idx)
+            return sample_idx
 
+        # Return the fallback frame range if it fails
+        except:
+            return fallback
+        
     def get_vid_idx(self, vr, vid_data=None):
 
         if self.use_random_start_idx:
@@ -135,7 +153,7 @@ class VideoDataset(Dataset):
                 idx = 1
                 
             # Resolve sample index
-            sample_index = list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
+            sample_index = self.get_sample_idx(idx, vr)
 
             # Process video and rearrange
             video = vr.get_batch(sample_index)
@@ -164,7 +182,7 @@ class VideoDataset(Dataset):
                 idx = 1
                 
             # Resolve sample index
-            sample_index = list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
+            sample_index = self.get_sample_idx(idx, vr)
             
             # Get video prompt
             prompt = vid_data['prompt']
