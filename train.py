@@ -160,6 +160,17 @@ def tensor_to_vae_latent(t, vae):
 
     return latents
 
+def sample_noise(latents, noise_strength, use_offset_noise):
+    b ,c, f, *_ = latents.shape
+    noise_latents = torch.randn_like(latents, device=latents.device)
+    offset_noise = None
+
+    if use_offset_noise:
+        offset_noise = torch.randn(b, c, f, 1, 1, device=latents.device)
+        noise = noise_latents + noise_strength * offset_noise
+
+    return noise_latents
+
 def should_sample(global_step, validation_steps, validation_data):
     return (global_step % validation_steps == 0 or global_step == 1)  \
     and validation_data.sample_preview
@@ -195,6 +206,8 @@ def main(
     enable_xformers_memory_efficient_attention: bool = True,
     seed: Optional[int] = None,
     train_text_encoder: bool = False,
+    use_offset_noise: bool = False,
+    offset_noise_strength: float = 0.1,
     **kwargs
 ):
 
@@ -339,7 +352,7 @@ def main(
         latents = tensor_to_vae_latent(pixel_values, vae)
 
         # Sample noise that we'll add to the latents
-        noise = torch.randn_like(latents)
+        noise = sample_noise(latents, offset_noise_strength, use_offset_noise)
         bsz = latents.shape[0]
 
         # Sample a random timestep for each video
