@@ -9,7 +9,7 @@ train_data:
   preprocessed: True
   n_sample_frames: 1
   shuffle_frames: False
-  width: 384      
+  width: 512      
   height: 320
   sample_start_idx: 0
   sample_frame_rate: 8
@@ -22,7 +22,7 @@ validation_data:
   prompt: ""
   sample_preview: True
   num_frames: 16
-  width: 384
+  width: 512
   height: 320
   num_inference_steps: 50
   guidance_scale: 9
