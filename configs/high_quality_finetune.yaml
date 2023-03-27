@@ -33,7 +33,7 @@ train_batch_size: 1
 max_train_steps: 50000
 checkpointing_steps: 2500
 validation_steps: 200
-unfreeze_temp: True
+unfreeze_temp: False
 trainable_modules:
   - "to_q"
   - "to_k"
