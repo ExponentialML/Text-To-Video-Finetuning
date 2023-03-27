@@ -12,7 +12,7 @@ train_data:
   width: 384      
   height: 256
   sample_start_idx: 0
-  sample_frame_rate: 30
+  sample_frame_rate: 8
   vid_data_key: "video_path"
 
   single_video_path: ""
