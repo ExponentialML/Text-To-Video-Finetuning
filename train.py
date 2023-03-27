@@ -133,21 +133,34 @@ def cast_to_gpu_and_type(model_list, accelerator, weight_dtype):
     for model in model_list:
         if model is not None: model.to(accelerator.device, dtype=weight_dtype)
 
-def enable_trainable_unet_modules(model, trainable_modules=None, is_enabled=True):
-    global already_printed_unet
+def should_unfreeze(tm, name, unfreeze_temp=False):
+    if unfreeze_temp:
+        return tm in name
+    else:
+        return tm in name and 'temp' not in name
 
+def enable_trainable_unet_modules(
+        model, 
+        unfreeze_temp=False, 
+        trainable_modules=None, 
+        is_enabled=True
+    ):
+    global already_printed_unet
+    global already_unfrozen 
+    
     # This can most definitely be refactored :-)
     unfrozen_params = 0
-    if trainable_modules is not None:
+    if trainable_modules is not None and not already_unfrozen:
         for name, module in model.named_modules():
             for tm in tuple(trainable_modules):
-                if tm in name:
+                if should_unfreeze(tm, name, unfreeze_temp):
                     for m in module.parameters():
                         m.requires_grad_(is_enabled)
                         if is_enabled: unfrozen_params +=1
 
     if unfrozen_params > 0 and not already_printed_unet:
         already_printed_unet = True 
+        already_unfrozen = True
         print(f"{unfrozen_params} params have been unfrozen for training.")
 
 def tensor_to_vae_latent(t, vae):
@@ -207,6 +220,7 @@ def main(
     seed: Optional[int] = None,
     train_text_encoder: bool = False,
     use_offset_noise: bool = False,
+    unfreeze_temp: bool = False,
     offset_noise_strength: float = 0.1,
     **kwargs
 ):
@@ -367,7 +381,12 @@ def main(
         if train_encoder:
             text_encoder.train()
 
-        enable_trainable_unet_modules(unet, trainable_modules, is_enabled=True)
+        enable_trainable_unet_modules(
+                unet, 
+                unfreeze_temp,
+                trainable_modules, 
+                is_enabled=True,
+            )
 
         # Get the text embedding for conditioning
         encoder_hidden_states = text_encoder(batch['prompt_ids'])[0]
