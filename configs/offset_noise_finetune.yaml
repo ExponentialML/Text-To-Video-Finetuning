@@ -45,3 +45,6 @@ use_8bit_adam: False # This seems to be incompatible at the moment.
 
 # Xformers must be installed
 enable_xformers_memory_efficient_attention: True
+
+# Use scaled dot product attention (Only available with >= Torch 2.0)
+enable_torch_2_attn: True

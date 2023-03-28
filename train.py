@@ -101,7 +101,7 @@ def set_torch_2_attn(unet):
     if optim_count > 0: 
         print(f"{optim_count} Attention layers using Scaled Dot Product Attention.")
 
-def handle_memory_attention(enable_xformers_memory_efficient_attention, unet): 
+def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_torch_2_attn, unet): 
     try:
         is_torch_2 = hasattr(F, 'scaled_dot_product_attention')
 
@@ -111,7 +111,8 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, unet):
                 unet.enable_xformers_memory_efficient_attention(attention_op=MemoryEfficientAttentionFlashAttentionOp)
             else:
                 raise ValueError("xformers is not available. Make sure it is installed correctly")
-        else:
+        
+        if enable_torch_2_attn and is_torch_2:
             set_torch_2_attn(unet)
     except:
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
@@ -230,6 +231,7 @@ def main(
     mixed_precision: Optional[str] = "fp16",
     use_8bit_adam: bool = False,
     enable_xformers_memory_efficient_attention: bool = True,
+    enable_torch_2_attn: bool = False,
     seed: Optional[int] = None,
     train_text_encoder: bool = False,
     use_offset_noise: bool = False,
@@ -268,7 +270,7 @@ def main(
     freeze_models([vae, text_encoder, unet])
     
     # Enable xformers if available
-    handle_memory_attention(enable_xformers_memory_efficient_attention, unet)
+    handle_memory_attention(enable_xformers_memory_efficient_attention, enable_torch_2_attn, unet)
 
     if scale_lr:
         learning_rate = (
