@@ -79,7 +79,6 @@ def load_primary_models(pretrained_model_path):
 
     return noise_scheduler, tokenizer, text_encoder, vae, unet
 
-
 def freeze_models(models_to_freeze):
     for model in models_to_freeze:
         if model is not None: model.requires_grad_(False) 
@@ -91,12 +90,16 @@ def set_processors(attentions):
     for attn in attentions: attn.set_processor(AttnProcessor2_0()) 
 
 def set_torch_2_attn(unet):
+    optim_count = 0
+    
     for name, module in unet.named_modules():
         if is_attn(name):
             if isinstance(module, torch.nn.ModuleList):
                 for m in module:
                     if isinstance(m, BasicTransformerBlock):
                         set_processors([m.attn1, m.attn2])
+    if optim_count > 0: 
+        print(f"{optim_count} Attention layers using Scaled Dot Product Attention.")
 
 def handle_memory_attention(enable_xformers_memory_efficient_attention, unet):
     is_torch_2 = hasattr(F, 'scaled_dot_product_attention')
