@@ -2,12 +2,9 @@
 ## Finetune ModelScope's Text To Video model using Diffusers 🧨 
 ***(This is a WIP)***
 
-![output](https://user-images.githubusercontent.com/59846140/227372411-9fca2015-ba02-48fa-a567-1430e9fc72a7.gif)
+### Updates
 
-*a small cute dragon sitting on a tree branch in a city, realistc, render, cyberpunk, steampunk*
-
-*Trained on a single video of bird for 1100 steps with last attention layers unfrozen.*
-
+- **2023-3-27**: Support for using Scaled Dot Product Attention. 
 
 ## Getting Started
 ### Requirements
@@ -20,7 +17,7 @@ git clone https://github.com/ExponentialML/Text-To-Video-Finetuning.git
 pip install -r requirements.txt
 ```
 
-All code was tested on Python 3.10.9 & Torch version 1.13.1.
+All code was tested on Python 3.10.9 & Torch version 1.13.1 & 2.0.
 
 You could potentially save memory by installing xformers and enabling it in your config. Please follow the instructions at the following repository for details on how to install.
 
