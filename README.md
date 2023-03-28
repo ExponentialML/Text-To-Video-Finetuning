@@ -4,7 +4,7 @@
 
 ### Updates
 
-- **2023-3-27**: Support for using Scaled Dot Product Attention. 
+- **2023-3-27**: Support for using Scaled Dot Product Attention for Torch 2.0 users. 
 
 ## Getting Started
 ### Requirements
