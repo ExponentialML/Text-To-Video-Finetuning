@@ -101,17 +101,20 @@ def set_torch_2_attn(unet):
     if optim_count > 0: 
         print(f"{optim_count} Attention layers using Scaled Dot Product Attention.")
 
-def handle_memory_attention(enable_xformers_memory_efficient_attention, unet):
-    is_torch_2 = hasattr(F, 'scaled_dot_product_attention')
+def handle_memory_attention(enable_xformers_memory_efficient_attention, unet): 
+    try:
+        is_torch_2 = hasattr(F, 'scaled_dot_product_attention')
 
-    if enable_xformers_memory_efficient_attention and not is_torch_2:
-        if is_xformers_available():
-            from xformers.ops import MemoryEfficientAttentionFlashAttentionOp
-            unet.enable_xformers_memory_efficient_attention(attention_op=MemoryEfficientAttentionFlashAttentionOp)
+        if enable_xformers_memory_efficient_attention and not is_torch_2:
+            if is_xformers_available():
+                from xformers.ops import MemoryEfficientAttentionFlashAttentionOp
+                unet.enable_xformers_memory_efficient_attention(attention_op=MemoryEfficientAttentionFlashAttentionOp)
+            else:
+                raise ValueError("xformers is not available. Make sure it is installed correctly")
         else:
-            raise ValueError("xformers is not available. Make sure it is installed correctly")
-    else:
-        set_torch_2_attn(unet)
+            set_torch_2_attn(unet)
+    except:
+        print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
 def param_optim(model, condition):
     return {"model": model, "condition": condition}
