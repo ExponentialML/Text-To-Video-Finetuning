@@ -85,7 +85,7 @@ def freeze_models(models_to_freeze):
         if model is not None: model.requires_grad_(False) 
             
 def is_attn(name):
-   return 'temp' not in name and 'attn1' or 'attn2' == name.split('.')[-1]
+   return 'temp' not in name and ('attn1' or 'attn2' == name.split('.')[-1])
 
 def set_processors(attentions):
     for attn in attentions: attn.set_processor(AttnProcessor2_0()) 
