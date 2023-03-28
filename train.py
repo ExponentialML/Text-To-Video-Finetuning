@@ -83,6 +83,9 @@ def load_primary_models(pretrained_model_path):
 def freeze_models(models_to_freeze):
     for model in models_to_freeze:
         if model is not None: model.requires_grad_(False) 
+            
+def is_attn(name):
+   return 'temp' not in name and 'attn1' or 'attn2' == name.split('.')[-1]
 
 def set_processors(attentions):
     for attn in attentions: attn.set_processor(AttnProcessor2_0()) 
@@ -94,7 +97,6 @@ def set_torch_2_attn(unet):
                 for m in module:
                     if isinstance(m, BasicTransformerBlock):
                         set_processors([m.attn1, m.attn2])
-
 
 def handle_memory_attention(enable_xformers_memory_efficient_attention, unet):
     is_torch_2 = hasattr(F, 'scaled_dot_product_attention')
