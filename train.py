@@ -30,6 +30,8 @@ from diffusers import DPMSolverMultistepScheduler, DDPMScheduler, TextToVideoSDP
 from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version, export_to_video
 from diffusers.utils.import_utils import is_xformers_available
+from diffusers.models.attention_processor import AttnProcessor2_0, Attention
+from diffusers.models.attention import BasicTransformerBlock
 
 from transformers import CLIPTextModel, CLIPTokenizer
 from utils.dataset import VideoDataset
@@ -77,18 +79,39 @@ def load_primary_models(pretrained_model_path):
 
     return noise_scheduler, tokenizer, text_encoder, vae, unet
 
-
 def freeze_models(models_to_freeze):
     for model in models_to_freeze:
         if model is not None: model.requires_grad_(False) 
+            
+def is_attn(name):
+   return 'temp' not in name and ('attn1' or 'attn2' == name.split('.')[-1])
 
-def handle_xformers(enable_xformers_memory_efficient_attention, unet):
-    if enable_xformers_memory_efficient_attention:
+def set_processors(attentions):
+    for attn in attentions: attn.set_processor(AttnProcessor2_0()) 
+
+def set_torch_2_attn(unet):
+    optim_count = 0
+    
+    for name, module in unet.named_modules():
+        if is_attn(name):
+            if isinstance(module, torch.nn.ModuleList):
+                for m in module:
+                    if isinstance(m, BasicTransformerBlock):
+                        set_processors([m.attn1, m.attn2])
+    if optim_count > 0: 
+        print(f"{optim_count} Attention layers using Scaled Dot Product Attention.")
+
+def handle_memory_attention(enable_xformers_memory_efficient_attention, unet):
+    is_torch_2 = hasattr(F, 'scaled_dot_product_attention')
+
+    if enable_xformers_memory_efficient_attention and not is_torch_2:
         if is_xformers_available():
             from xformers.ops import MemoryEfficientAttentionFlashAttentionOp
             unet.enable_xformers_memory_efficient_attention(attention_op=MemoryEfficientAttentionFlashAttentionOp)
         else:
             raise ValueError("xformers is not available. Make sure it is installed correctly")
+    else:
+        set_torch_2_attn(unet)
 
 def param_optim(model, condition):
     return {"model": model, "condition": condition}
@@ -242,7 +265,7 @@ def main(
     freeze_models([vae, text_encoder, unet])
     
     # Enable xformers if available
-    handle_xformers(enable_xformers_memory_efficient_attention, unet)
+    handle_memory_attention(enable_xformers_memory_efficient_attention, unet)
 
     if scale_lr:
         learning_rate = (
