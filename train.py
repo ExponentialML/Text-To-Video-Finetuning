@@ -24,8 +24,8 @@ from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 
-
-from diffusers.models import AutoencoderKL, UNet3DConditionModel
+from .models.unet_3d_condition import UNet3DConditionModel
+from diffusers.models import AutoencoderKL
 from diffusers import DPMSolverMultistepScheduler, DDPMScheduler, TextToVideoSDPipeline
 from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version, export_to_video
@@ -226,6 +226,7 @@ def main(
     adam_epsilon: float = 1e-08,
     max_grad_norm: float = 1.0,
     gradient_accumulation_steps: int = 1,
+    gradient_checkpointing: bool = False,
     checkpointing_steps: int = 500,
     resume_from_checkpoint: Optional[str] = None,
     mixed_precision: Optional[str] = "fp16",
@@ -329,6 +330,9 @@ def main(
         lr_scheduler, 
         text_encoder
     )
+
+    # Use Gradient Checkpointing if enabled.
+    unet._set_gradient_checkpointing(value=gradient_checkpointing)
     
     # Enable VAE slicing to save memory.
     vae.enable_slicing()
