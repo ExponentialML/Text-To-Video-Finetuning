@@ -472,6 +472,8 @@ class VideoFolderDataset(Dataset):
             return_tensors="pt",
         ).input_ids
 
+    def __getname__(): return 'folder'
+
     def __len__(self):
         return len(self.video_files)
 
