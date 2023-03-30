@@ -1,7 +1,9 @@
 pretrained_model_path: "./models/model_scope_diffusers/" #https://huggingface.co/damo-vilab/text-to-video-ms-1.7b/tree/main
 output_dir: "./outputs"
 train_text_encoder: False
-
+dataset_type:
+  - "single_video"
+  
 train_data:
   json_path: ""
   preprocessed: True
