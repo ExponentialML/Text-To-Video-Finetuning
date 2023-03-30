@@ -211,6 +211,7 @@ class VideoFolderDataset(Dataset):
         fps: int = 8,
         path: str = "./data",
         fallback_prompt: str = "",
+        **kwargs
     ):
         self.tokenizer = tokenizer
 
