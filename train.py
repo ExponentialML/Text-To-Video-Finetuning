@@ -10,6 +10,7 @@ import gc
 from typing import Dict, Optional, Tuple
 from omegaconf import OmegaConf
 
+import cv2
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
@@ -34,7 +35,7 @@ from diffusers.models.attention_processor import AttnProcessor2_0, Attention
 from diffusers.models.attention import BasicTransformerBlock
 
 from transformers import CLIPTextModel, CLIPTokenizer
-from utils.dataset import VideoDataset
+from utils.dataset import VideoDataset, VideoFolderDataset
 from einops import rearrange, repeat
 
 already_printed_unet = False
@@ -59,6 +60,14 @@ def accelerate_set_verbose(accelerator):
     else:
         transformers.utils.logging.set_verbosity_error()
         diffusers.utils.logging.set_verbosity_error()
+
+def export_to_video(video_frames, output_video_path, fps):
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    h, w, _ = video_frames[0].shape
+    video_writer = cv2.VideoWriter(output_video_path, fourcc, fps=fps, frameSize=(w, h))
+    for i in range(len(video_frames)):
+        img = cv2.cvtColor(video_frames[i], cv2.COLOR_RGB2BGR)
+        video_writer.write(img)
 
 def create_output_folders(output_dir, config):
     now = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -306,7 +315,10 @@ def main(
     )
 
     # Get the training dataset
-    train_dataset = VideoDataset(**train_data, tokenizer=tokenizer)
+    if train_data.pop("type", "regular") == "folder":
+        train_dataset = VideoFolderDataset(**train_data, tokenizer=tokenizer)
+    else:
+        train_dataset = VideoDataset(**train_data, tokenizer=tokenizer)
 
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(
@@ -513,7 +525,7 @@ def main(
                                     num_inference_steps=validation_data.num_inference_steps,
                                     guidance_scale=validation_data.guidance_scale
                                 ).frames
-                            video_path = export_to_video(video_frames, out_file)
+                            export_to_video(video_frames, out_file, train_data.get('fps', 8))
 
                             del pipeline
                             gc.collect()

@@ -9,6 +9,7 @@ decord.bridge.set_bridge('torch')
 
 from torch.utils.data import Dataset
 from einops import rearrange
+from glob import glob
 
 class VideoDataset(Dataset):
     def __init__(
@@ -199,3 +200,65 @@ class VideoDataset(Dataset):
         }
 
         return example
+
+class VideoFolderDataset(Dataset):
+    def __init__(
+        self,
+        tokenizer=None,
+        width: int = 256,
+        height: int = 256,
+        n_sample_frames: int = 16,
+        fps: int = 8,
+        path: str = "./data",
+        fallback_prompt: str = "",
+    ):
+        self.tokenizer = tokenizer
+
+        self.fallback_prompt = fallback_prompt
+
+        self.video_files = glob(f"{path}/*.mp4")
+
+        self.width = width
+        self.height = height
+
+        self.n_sample_frames = n_sample_frames
+        self.fps = fps
+
+    def get_prompt_ids(self, prompt):
+        return self.tokenizer(
+            prompt,
+            truncation=True,
+            padding="max_length",
+            max_length=self.tokenizer.model_max_length,
+            return_tensors="pt",
+        ).input_ids
+
+    def __len__(self):
+        return len(self.video_files)
+
+    def __getitem__(self, index):
+        vr = decord.VideoReader(self.video_files[index], width=self.width, height=self.height)
+        native_fps = vr.get_avg_fps()
+        every_nth_frame = round(native_fps / self.fps)
+
+        effective_length = len(vr) // every_nth_frame
+
+        if effective_length < self.n_sample_frames:
+            return self.__getitem__(random.randint(0, len(self.video_files) - 1))
+
+        effective_idx = random.randint(0, effective_length - self.n_sample_frames)
+
+        idxs = every_nth_frame * np.arange(effective_idx, effective_idx + self.n_sample_frames)
+
+        video = vr.get_batch(idxs)
+        video = rearrange(video, "f h w c -> f c h w")
+
+        if os.path.exists(self.video_files[index].replace(".mp4", ".txt")):
+            with open(self.video_files[index].replace(".mp4", ".txt"), "r") as f:
+                prompt = f.read()
+        else:
+            prompt = self.fallback_prompt
+
+        prompt_ids = self.get_prompt_ids(prompt)
+
+        return {"pixel_values": (video / 127.5 - 1.0), "prompt_ids": prompt_ids[0], "text_prompt": prompt}
