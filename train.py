@@ -532,7 +532,11 @@ def main(
                             pipeline.scheduler = diffusion_scheduler
 
                             prompt = text_prompt if len(validation_data.prompt) <= 0 else validation_data.prompt
-                            out_file = f"{output_dir}/samples/{global_step}_{prompt}.mp4"
+
+                            curr_dataset_name = batch['dataset']
+                            save_filename = f"{global_step}_dataset-{curr_dataset_name}_{prompt}"
+
+                            out_file = f"{output_dir}/samples/{save_filename}.mp4"
                             
                             with torch.no_grad():
                                 video_frames = pipeline(
