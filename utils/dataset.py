@@ -107,7 +107,7 @@ class VideoDataset(Dataset):
         
     def get_vid_idx(self, vr, vid_data=None):
 
-        if self.use_random_start_idx:
+        if self.use_random_start_idx and self.n_sample_frames == 1:
             
             # Randomize the frame rate at different speeds
             self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
@@ -119,7 +119,6 @@ class VideoDataset(Dataset):
             idx = random.randint(1, max_frame)
             
         else:
-
             if vid_data is not None:
                 idx = vid_data['frame_index']
             else:
