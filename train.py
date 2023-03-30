@@ -25,7 +25,7 @@ from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 
-from .models.unet_3d_condition import UNet3DConditionModel
+from models.unet_3d_condition import UNet3DConditionModel
 from diffusers.models import AutoencoderKL
 from diffusers import DPMSolverMultistepScheduler, DDPMScheduler, TextToVideoSDPipeline
 from diffusers.optimization import get_scheduler
