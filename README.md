@@ -9,10 +9,15 @@
 ## Getting Started
 ### Requirements
 
+#### Installation
 ```bash
 git clone https://github.com/ExponentialML/Text-To-Video-Finetuning.git
+cd Text-To-Video-Finetuning
+git lfs install
+git clone https://huggingface.co/damo-vilab/text-to-video-ms-1.7b ./models/model_scope_diffusers/
 ```
 
+#### Python Requirements
 ```bash
 pip install -r requirements.txt
 ```
@@ -23,20 +28,12 @@ You could potentially save memory by installing xformers and enabling it in your
 
 https://github.com/facebookresearch/xformers
 
-### Models
-The models were downloaded from here https://huggingface.co/damo-vilab/text-to-video-ms-1.7b/tree/main.
-
-This repository was only tested with **FP16** safetensors. Other files (bin, FP32) should work fine, but if you have any trouble, refer to this.
-
-If you wish to download all of the models, you can use this command:
-
-```bash
-git lfs install
-git clone https://huggingface.co/damo-vilab/text-to-video-ms-1.7b
-```
-
 ## Hardware
-Minimum RTX 3090. You're free to open a PR for optimization (please do!), but this is heavy without gradient checkpointing support.
+Recommended to use a RTX 3090, but you should be able to train on GPUs with <= 16GB ram with:
+- Validation turned off 
+- Xformers or Torch 2.0 Scaled Dot-Product Attention 
+- gradient checkpointing enabled. 
+- Resolution of 256.
 
 ## Usage
 
