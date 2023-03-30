@@ -61,7 +61,7 @@ def accelerate_set_verbose(accelerator):
         transformers.utils.logging.set_verbosity_error()
         diffusers.utils.logging.set_verbosity_error()
 
-def get_train_dataset(dataset_types):
+def get_train_dataset(dataset_types, train_data, tokenizer):
     train_datasets = []
 
     # Loop through all available datasets, get the name, then add to list of data to process.
@@ -330,7 +330,7 @@ def main(
     )
 
     # Get the training dataset based on types (json, single_video, image)
-    train_datasets = get_train_dataset(dataset_types)
+    train_datasets = get_train_dataset(dataset_types, train_data, tokenizer)
 
     # Process one dataset
     if len(train_datasets) == 1:
