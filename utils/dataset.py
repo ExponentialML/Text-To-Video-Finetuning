@@ -43,7 +43,7 @@ def get_text_prompt(
                 break
 
         if os.path.exists(caption_file):
-            read_caption_file(caption_file)
+            return read_caption_file(caption_file)
         
         # Return text prompt if no conditions are met.
         return text_prompt
