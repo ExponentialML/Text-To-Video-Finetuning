@@ -10,11 +10,19 @@
 ### Requirements
 
 #### Installation
+
+#### Repository Requirements
 ```bash
 git clone https://github.com/ExponentialML/Text-To-Video-Finetuning.git
 cd Text-To-Video-Finetuning
 git lfs install
 git clone https://huggingface.co/damo-vilab/text-to-video-ms-1.7b ./models/model_scope_diffusers/
+```
+
+#### Create Conda Environment
+```bash
+conda create -n text2video-finetune python=3.10
+conda activate text2video-finetune
 ```
 
 #### Python Requirements
