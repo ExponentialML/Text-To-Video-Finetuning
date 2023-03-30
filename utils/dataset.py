@@ -219,7 +219,8 @@ class VideoJsonDataset(Dataset):
         example = {
             "pixel_values": (video / 127.5 - 1.0),
             "prompt_ids": prompt_ids[0],
-            "text_prompt": prompt
+            "text_prompt": prompt,
+            'dataset': self.__getname__()
         }
 
         return example
@@ -347,7 +348,8 @@ class SingleVideoDataset(Dataset):
         example = {
             "pixel_values": (video / 127.5 - 1.0),
             "prompt_ids": prompt_ids[0],
-            "text_prompt": prompt
+            "text_prompt": prompt,
+            'dataset': self.__getname__()
         }
 
         return example
@@ -437,7 +439,8 @@ class ImageDataset(Dataset):
         example = {
             "pixel_values": (img / 127.5 - 1.0),
             "prompt_ids": prompt_ids[0],
-            "text_prompt": prompt
+            "text_prompt": prompt, 
+            'dataset': self.__getname__()
         }
 
         return example
@@ -506,4 +509,4 @@ class VideoFolderDataset(Dataset):
 
         prompt_ids = self.get_prompt_ids(prompt)
 
-        return {"pixel_values": (video / 127.5 - 1.0), "prompt_ids": prompt_ids[0], "text_prompt": prompt}
+        return {"pixel_values": (video / 127.5 - 1.0), "prompt_ids": prompt_ids[0], "text_prompt": prompt, 'dataset': self.__getname__()}
