@@ -3,7 +3,7 @@
 ***(This is a WIP)***
 
 ### Updates
-
+- **2023-3-29**: Added gradient checkpointing support. 
 - **2023-3-27**: Support for using Scaled Dot Product Attention for Torch 2.0 users. 
 
 ## Getting Started
@@ -37,6 +37,13 @@ Recommended to use a RTX 3090, but you should be able to train on GPUs with <= 1
 
 ## Usage
 
+### Preprocessing your data
+All videos were preprocessed using the script [here](https://github.com/ExponentialML/Video-BLIP2-Preprocessor) using automatic BLIP2 captions. Please follow the instructions there.
+
+If you wish to use a custom dataloader (for instance, a folder of mp4's and captions), you're free to update the dataloader [here](https://github.com/ExponentialML/Text-To-Video-Finetuning/blob/d72e34cfbd91d2a62c07172f9ef079ca5cd651b2/utils/dataset.py#L83). 
+
+Feel free to share your dataloaders for others to use! It would be much appreciated.
+
 ### Finetuning using a training JSON
 ```python
 python train.py --config ./configs/my_config.yaml
@@ -60,13 +67,6 @@ Play around with learning rates to see what works best for you (5e-6, 3e-5, 1e-4
 When finetuning on a single video, you should see results in half as many steps.
 
 After training, you should see your results in your output directory. By default, it should be placed at the script root under `./outputs/train_<date>`
-
-## Preprocessing your data
-All videos were preprocessed using the script [here](https://github.com/ExponentialML/Video-BLIP2-Preprocessor) using automatic BLIP2 captions. Please follow the instructions there.
-
-If you wish to use a custom dataloader (for instance, a folder of mp4's and captions), you're free to update the dataloader [here](https://github.com/ExponentialML/Text-To-Video-Finetuning/blob/d72e34cfbd91d2a62c07172f9ef079ca5cd651b2/utils/dataset.py#L83). 
-
-Feel free to share your dataloaders for others to use! It would be much appreciated.
 
 ## Configuration
 The configuration uses a YAML config borrowed from [Tune-A-Video](https://github.com/showlab/Tune-A-Video) reposotories. Here's the gist of how it works.
