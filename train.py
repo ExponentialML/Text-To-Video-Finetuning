@@ -377,7 +377,9 @@ def main(
 
         # Set noise scheduler to cosine (this can be done via config, but this ensures it's enabled)
         #noise_scheduler.beta_schedule = "squaredcos_cap_v2"
-
+        
+        unet.train()
+        
         # Convert videos to latent space
         pixel_values = batch["pixel_values"].to(weight_dtype)
 
@@ -398,6 +400,10 @@ def main(
         # Enable text encoder training
         if train_encoder:
             text_encoder.train()
+            cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)    
+            text_encoder.requires_grad_(True)
+        else:
+            text_encoder.requires_grad_(False)
 
         enable_trainable_unet_modules(unet, trainable_modules, is_enabled=True)
 
@@ -420,7 +426,6 @@ def main(
 
     for epoch in range(first_epoch, num_train_epochs):
         train_loss = 0.0
-        unet.train()
         
         for step, batch in enumerate(train_dataloader):
             # Skip steps until we reach the resumed step
@@ -483,7 +488,9 @@ def main(
                     if global_step == 1: print("Performing validation prompt.")
                     if accelerator.is_main_process:
                         with accelerator.autocast():
-
+                            unet.eval()
+                            text_encoder.eval()
+                            
                             pipeline = TextToVideoSDPipeline.from_pretrained(
                                 pretrained_model_path,
                                 text_encoder=text_encoder,
