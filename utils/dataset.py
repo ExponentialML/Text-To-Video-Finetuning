@@ -190,6 +190,7 @@ class VideoJsonDataset(Dataset):
 
         return video, prompt, prompt_ids
 
+    @staticmethod
     def __getname__(): return 'json'
 
     def __len__(self):
@@ -328,6 +329,7 @@ class SingleVideoDataset(Dataset):
 
         return video, prompt, prompt_ids
     
+    @staticmethod
     def __getname__(): return 'single_video'
 
     def __len__(self):
@@ -411,6 +413,7 @@ class ImageDataset(Dataset):
 
         return img, prompt, prompt_ids
 
+    @staticmethod
     def __getname__(): return 'image'
     
     def __len__(self):
@@ -472,6 +475,7 @@ class VideoFolderDataset(Dataset):
             return_tensors="pt",
         ).input_ids
 
+    @staticmethod
     def __getname__(): return 'folder'
 
     def __len__(self):
