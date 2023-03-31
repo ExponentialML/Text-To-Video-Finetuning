@@ -70,7 +70,6 @@ class VideoJsonDataset(Dataset):
             sample_frame_rate: int = 1,
             json_path: str ="./data",
             vid_data_key: str = "video_path",
-            use_random_start_idx: bool = False,
             preprocessed: bool = False,
             **kwargs
     ):
@@ -83,7 +82,6 @@ class VideoJsonDataset(Dataset):
         self.vid_data_key = vid_data_key
 
         self.original_start_idx = sample_start_idx
-        self.use_random_start_idx = use_random_start_idx
 
         self.width = width
         self.height = height

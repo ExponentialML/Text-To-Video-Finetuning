@@ -1,0 +1,105 @@
+# Pretrained diffusers model path.
+pretrained_model_path: "./models/model_scope_diffusers/" #https://huggingface.co/damo-vilab/text-to-video-ms-1.7b/tree/main
+
+# The folder where your training outputs will be placed.
+output_dir: "./outputs"
+
+# Train the text encoder. Experimental and only trains on one frame if video.
+train_text_encoder: False
+
+# 'image' | 'folder' | 'json' | 'single_video'
+dataset_types: 
+  - 'image'
+  - 'folder'
+  - 'json'
+  - 'single_video'
+
+# Training data parameters
+train_data:
+
+  # The width and height in which you want your training data to be resized to.
+  width: 256      
+  height: 256
+
+  # The start frame index where your videos should start (Leave this at zero for json and folder based training).
+  sample_start_idx: 0
+
+  # The rate at which your frames are sampled. 'folder' samples FPS like, 'json' and 'single_video' act as frame skip.
+  sample_frame_rate: 30
+
+  # The number of frames to sample. The higher this number, the higher the VRAM (acts similar to batch size).
+  n_sample_frames: 4
+
+  # 'single_video'
+  single_video_path: "path/to/single/video.mp4"
+
+  # 'folder'
+  path: "path/to/folder/of/videos/"
+
+  # 'json'
+  json: 'path/to/train/json/'
+
+  # 'single_video'
+  image_dir: 'path/to/image/directory'
+
+# Validation data parameters.
+validation_data:
+
+  # A custom prompt that is different from your training dataset. 
+  prompt: ""
+
+  # Whether or not to sample preview during training (Requires more VRAM).
+  sample_preview: True
+
+  # The number of frames to sample during validation.
+  num_frames: 16
+
+  # Height and width of validation sample.
+  width: 256
+  height: 256
+
+  # Number of inference steps when generating the video.
+  num_inference_steps: 50
+
+  # CFG scale
+  guidance_scale: 9
+
+# Learning rate for AdamW
+learning_rate: 1e-5
+
+# Weight decay. Higher = more regularization. Lower = closer to dataset.
+adam_weight_decay: 1e-2
+
+# How many batches to train. Not to be confused with video frames.
+train_batch_size: 1
+
+# Maximum number of train steps. Model is saved after training.
+max_train_steps: 50000
+
+# Saves a model every nth step.
+checkpointing_steps: 5000
+
+# How many steps to do for validation if sample_preview is enabled.
+validation_steps: 100
+
+# Which modules we want to unfreeze for the UNET. Advanced usage.
+trainable_modules:
+  - "attn1"
+  - "attn2"
+  - 'temp_conv'
+
+# Seed for validation.
+seed: 64
+
+# Whether or not we want to use mixed precision with accelerate
+mixed_precision: "fp16"
+use_8bit_adam: False # This seems to be incompatible at the moment.
+
+# Trades VRAM usage for speed. You lose roughly 20% of training speed, but save a lot of VRAM.
+gradient_checkpointing: True
+
+# Xformers must be installed
+enable_xformers_memory_efficient_attention: True
+
+# Use scaled dot product attention (Only available with >= Torch 2.0)
+#enable_torch_2_attn: True
