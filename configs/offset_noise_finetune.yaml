@@ -3,7 +3,9 @@ output_dir: "./outputs"
 train_text_encoder: False
 offset_noise_strength: 0.1
 use_offset_noise: True
-
+dataset_type:
+  - 'json'
+  
 train_data:
   json_path: "./json/train.json"
   preprocessed: True

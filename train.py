@@ -35,7 +35,7 @@ from diffusers.models.attention_processor import AttnProcessor2_0, Attention
 from diffusers.models.attention import BasicTransformerBlock
 
 from transformers import CLIPTextModel, CLIPTokenizer
-from utils.dataset import VideoDataset, VideoFolderDataset
+from utils.dataset import VideoJsonDataset, SingleVideoDataset, ImageDataset, VideoFolderDataset
 from einops import rearrange, repeat
 
 already_printed_unet = False
@@ -60,6 +60,20 @@ def accelerate_set_verbose(accelerator):
     else:
         transformers.utils.logging.set_verbosity_error()
         diffusers.utils.logging.set_verbosity_error()
+
+def get_train_dataset(dataset_types, train_data, tokenizer):
+    train_datasets = []
+
+    # Loop through all available datasets, get the name, then add to list of data to process.
+    for DataSet in [VideoJsonDataset, SingleVideoDataset, ImageDataset, VideoFolderDataset]:
+        for dataset in dataset_types:
+            if dataset == DataSet.__getname__():
+                train_datasets.append(DataSet(**train_data, tokenizer=tokenizer))
+
+    if len(train_datasets) > 0:
+        return train_datasets
+    else:
+        raise ValueError("Dataset type not found: 'json', 'single_video', 'folder', 'image'")
 
 def export_to_video(video_frames, output_video_path, fps):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -221,6 +235,7 @@ def main(
     output_dir: str,
     train_data: Dict,
     validation_data: Dict,
+    dataset_types: Tuple[str] = ('json'),
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = ("attn1", "attn2" ),
     train_batch_size: int = 1,
@@ -314,16 +329,19 @@ def main(
         num_training_steps=max_train_steps * gradient_accumulation_steps,
     )
 
-    # Get the training dataset
-    if train_data.pop("type", "regular") == "folder":
-        train_dataset = VideoFolderDataset(**train_data, tokenizer=tokenizer)
+    # Get the training dataset based on types (json, single_video, image)
+    train_datasets = get_train_dataset(dataset_types, train_data, tokenizer)
+
+    # Process one dataset
+    if len(train_datasets) == 1:
+        train_dataset = train_datasets[0]
+    
+    # Process many datasets
     else:
-        train_dataset = VideoDataset(**train_data, tokenizer=tokenizer)
+        train_dataset = torch.utils.data.ConcatDataset(train_datasets) 
 
     # DataLoaders creation:
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=train_batch_size, shuffle=True
-    )
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size)
 
     # Used for unconditional training. Not implemented in training config, but may do so manually.
     uncond_ids = tokenizer(
@@ -514,7 +532,11 @@ def main(
                             pipeline.scheduler = diffusion_scheduler
 
                             prompt = text_prompt if len(validation_data.prompt) <= 0 else validation_data.prompt
-                            out_file = f"{output_dir}/samples/{global_step}_{prompt}.mp4"
+
+                            curr_dataset_name = batch['dataset']
+                            save_filename = f"{global_step}_dataset-{curr_dataset_name}_{prompt}"
+
+                            out_file = f"{output_dir}/samples/{save_filename}.mp4"
                             
                             with torch.no_grad():
                                 video_frames = pipeline(

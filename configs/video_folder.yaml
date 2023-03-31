@@ -1,9 +1,10 @@
 pretrained_model_path: "./text-to-video-ms-1.7b/"
 output_dir: "./output"
 train_text_encoder: False
-
+dataset_type:
+  - 'folder'
+  
 train_data:
-  type: folder
   path: "path/to/folder/of/videos/"
   n_sample_frames: 16
   width: 256
