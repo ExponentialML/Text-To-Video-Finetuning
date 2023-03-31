@@ -1,17 +1,14 @@
 # Text-To-Video-Finetuning
 ## Finetune ModelScope's Text To Video model using Diffusers 🧨 
-***(This is a WIP)***
 
 ### Updates
 - **2023-3-29**: Added gradient checkpointing support. 
 - **2023-3-27**: Support for using Scaled Dot Product Attention for Torch 2.0 users. 
 
 ## Getting Started
-### Requirements
 
-#### Installation
+### Requirements & Installation
 
-#### Repository Requirements
 ```bash
 git clone https://github.com/ExponentialML/Text-To-Video-Finetuning.git
 cd Text-To-Video-Finetuning
@@ -19,16 +16,24 @@ git lfs install
 git clone https://huggingface.co/damo-vilab/text-to-video-ms-1.7b ./models/model_scope_diffusers/
 ```
 
-#### Create Conda Environment
+### Create Conda Environment (Optional)
+It is recommended to install Anaconda.
+
+**Windows Installation:** https://docs.anaconda.com/anaconda/install/windows/
+
+**Linux Installation:** https://docs.anaconda.com/anaconda/install/linux/
+
 ```bash
 conda create -n text2video-finetune python=3.10
 conda activate text2video-finetune
 ```
 
-#### Python Requirements
+### Python Requirements
 ```bash
 pip install -r requirements.txt
 ```
+
+## Hardware
 
 All code was tested on Python 3.10.9 & Torch version 1.13.1 & 2.0.
 
@@ -36,39 +41,52 @@ You could potentially save memory by installing xformers and enabling it in your
 
 https://github.com/facebookresearch/xformers
 
-## Hardware
 Recommended to use a RTX 3090, but you should be able to train on GPUs with <= 16GB ram with:
 - Validation turned off 
 - Xformers or Torch 2.0 Scaled Dot-Product Attention 
 - gradient checkpointing enabled. 
 - Resolution of 256.
 
-## Usage
+## Preprocessing your data
 
-### Preprocessing your data
-All videos were preprocessed using the script [here](https://github.com/ExponentialML/Video-BLIP2-Preprocessor) using automatic BLIP2 captions. Please follow the instructions there.
+### Using Captions
 
-If you wish to use a custom dataloader (for instance, a folder of mp4's and captions), you're free to update the dataloader [here](https://github.com/ExponentialML/Text-To-Video-Finetuning/blob/d72e34cfbd91d2a62c07172f9ef079ca5cd651b2/utils/dataset.py#L83). 
+You can use caption files when training on images or video. Simply place them into a folder like so:
 
-Feel free to share your dataloaders for others to use! It would be much appreciated.
+**Images**: `/images/img.png /images/img.txt`
+**Videos**: `/videos/vid.mp4 | /videos/vid.txt`
 
-### Finetuning using a training JSON
+### Process Automatically
+
+You can automatically caption the videos using the [Video-BLIP2-Preprocessor Script](https://github.com/ExponentialML/Video-BLIP2-Preprocessor)
+
+
+## Configuration
+
+The configuration uses a YAML config borrowed from [Tune-A-Video](https://github.com/showlab/Tune-A-Video) reposotories. 
+
+All configuration details are placed in `configs/v2/high_vram_config.yaml`. Each parameter has a definition for what it does.
+
+**You'll have to modify the config with your own data.** It is recommended to copy the config, then call it when using the train script: `my_config.yaml`
+
+### Finetuning on high VRAM systems.
 ```python
-python train.py --config ./configs/my_config.yaml
+python train.py --config ./configs/v2/high_vram_config.yaml
 ```
 
-### Finetuning using a training JSON and HQ settings
+### Finetuning on low VRAM systems.
 ```python
-python train.py --config ./configs/my_config_hq.yaml
+python train.py --config ./configs/v2/low_vram_config.yaml
 ```
 
-### Finetuning on a single video
+### Finetuning on single images.
 ```python
-python train.py --config ./configs/single_video_config.yaml
+python train.py --config ./configs/v2/image_training.yaml
 ```
 ---
 
-### Training Results
+## Training Results
+
 With a lot of data, you can expect training results to show at roughly 2500 steps at a constant learning rate of 5e-6. 
 Play around with learning rates to see what works best for you (5e-6, 3e-5, 1e-4).
 
@@ -76,124 +94,5 @@ When finetuning on a single video, you should see results in half as many steps.
 
 After training, you should see your results in your output directory. By default, it should be placed at the script root under `./outputs/train_<date>`
 
-## Configuration
-The configuration uses a YAML config borrowed from [Tune-A-Video](https://github.com/showlab/Tune-A-Video) reposotories. Here's the gist of how it works.
-
-<details>
-  
-```yaml
-
-# The path to your diffusers folder. The structure should look exactly like the huggingface one with folders and json configs
-pretrained_model_path: "diffusers_path"
-
-# The directory where your training runs (and samples) will be saved.
-output_dir: "./outputs"
-
-# Enable training the text encoder or not.
-train_text_encoder: False
-
-# The basis of where your training data is store.
-train_data:
-  
-  # The path to your JSON file using the steps above.
-  json_path: "json/train.json"
-  
-  # Leave this as true for now. Custom configurations are currently not supported.
-  preprocessed: True
-  
-  # Number of frames to sample from the videos. The higher this number, the more VRAM is required (usage is similar to batchsize)
-  n_sample_frames: 4
-  
-  # Choose whether or not to ignore the frame data from the preprocessing step, and shuffle them.
-  shuffle_frames: False
-  
-  # The height and width of training data.
-  width: 256      
-  height: 256
-  
-  # At what frame to start the video sampling. Ignores preprocessing frames.
-  sample_start_idx: 0
-  
-  # The rate of sampling frames. This effectively "skips" frames making it appear faster or slower.
-  sample_frame_rate: 1
-  
-  # The key of the video data name. This is to align with any preprocess script changes.
-  vid_data_key: "video_path"
-
-  # The video path and prompt for that video for single video training.
-  # If enabled, JSON path is ignored
-  single_video_path: ""
-  single_video_prompt: ""
-
-# This is the data for validation during training. Prompt will override training data prompts.
-  sample_preview: True
-  prompt: ""
-  num_frames: 16
-  width: 256
-  height: 256
-  num_inference_steps: 50
-  guidance_scale: 9
-
-# Training parameters
-learning_rate: 5e-6
-adam_weight_decay: 0
-train_batch_size: 1
-max_train_steps: 50000
-
-# Allow checkpointing during training (save once every X amount of steps)
-checkpointing_steps: 10000
-
-# How many steps during training before we create a sample
-validation_steps: 100
-
-# The parameters to unfreeze. As it is now, all attention layers are unfrozen. 
-# Unfreezing resnet layers would lead to better quality, but consumes a very large amount of VRAM.
-trainable_modules:
-  - "attn1"
-  - "attn1"
-
-# Seed for sampling validation
-seed: 64
-
-# Use mixed precision for better memory allocation
-mixed_precision: "fp16"
-
-# This seems to be incompatible at the moment in my testing.
-use_8bit_adam: False
-
-# Currently has no effect.
-enable_xformers_memory_efficient_attention: True
-
-```
-  </details>
-
-## Trainable modules (Advanced Usage)
-The `trainable_modules` parameter are a set list by the user that tells the model which layers to unfreeze. 
-
-Typically you want to train the cross attention layers. The more layers you unfreeze, the higher the VRAM usage. Typically in my testing, here is what I see.
-
-`"attentions"`: Uses a lot of VRAM, but high probability for quality.
-
-`"attn1", "attn2"`: Uses a good amount of VRAM, but allows for processing more frames. Good quality finetunes can happen with these settings.
-
-`"attn1.to_out", "attn2.to_out"`: This only trains the linears on on the cross attention layers. This seems to be a good tradeoff for VRAM with great results with a learning rate of 1e-4.
-
-## Running
-After training, you can easily run your model by doing the following.
-
-```python
-import torch
-from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
-from diffusers.utils import export_to_video
-
-my_trained_model_path = "./trained_model_path/"
-pipe = DiffusionPipeline.from_pretrained(my_trained_model_path, torch_dtype=torch.float16, variant="fp16")
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-pipe.enable_model_cpu_offload()
-
-prompt = "Your prompt based on train data"
-video_frames = pipe(prompt, num_inference_steps=25).frames
-
-out_file = "./my_video.mp4"
-video_path = export_to_video(video_frames, out_file)
-```
+## Deprecation
+If you want to use the V1 repository, you can use the branch [here](https://github.com/ExponentialML/Text-To-Video-Finetuning/tree/version/first-release).
