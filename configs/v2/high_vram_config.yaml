@@ -43,7 +43,7 @@ train_data:
   # 'json'
   json: 'path/to/train/json/'
 
-  # 'single_video'
+  # 'image'
   image_dir: 'path/to/image/directory'
 
 # Validation data parameters.
