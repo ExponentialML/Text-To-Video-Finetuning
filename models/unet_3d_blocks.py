@@ -22,6 +22,13 @@ from diffusers.models.transformer_temporal import TransformerTemporalModel
 # Assign gradient checkpoint function to simple variable for readability.
 g_c = checkpoint.checkpoint
 
+def use_temporal(module, num_frames, x):
+    if num_frames == 1:
+        if isinstance(module, TransformerTemporalModel):
+            return {"sample": x}
+        else:
+            return x
+
 def custom_checkpoint(module, mode=None):
     if mode == None: raise ValueError('Mode for gradient checkpointing cannot be none.')
     custom_forward = None
@@ -46,7 +53,11 @@ def custom_checkpoint(module, mode=None):
 
     if mode == 'temp':
          def custom_forward(hidden_states, num_frames=None):
-            inputs = module(hidden_states, num_frames=num_frames)
+            inputs = use_temporal(module, num_frames, hidden_states)
+            if inputs is None: inputs = module(
+                hidden_states, 
+                num_frames=num_frames
+            )
             return inputs
 
     return custom_forward
