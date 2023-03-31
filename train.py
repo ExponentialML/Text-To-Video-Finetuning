@@ -444,6 +444,7 @@ def main(
 
                 # Single frame index of noisy latents
                 noisy_latents = noisy_latents[:, :, :frame_idx, :, :]
+                noise = noise[:, :, :frame_idx, :, :]
                 
             # The text encoder doesn't have a temporal dimension, so we only train one frame.
             if latents.shape[2] == 1: 
