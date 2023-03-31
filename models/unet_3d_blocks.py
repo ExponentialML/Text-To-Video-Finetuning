@@ -355,9 +355,14 @@ class UNetMidBlock3DCrossAttn(nn.Module):
                     encoder_hidden_states=encoder_hidden_states,
                     cross_attention_kwargs=cross_attention_kwargs,
                 ).sample
-                hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
+                
+                if num_frames > 1:
+                    hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
+
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
 
         return hidden_states
 
@@ -487,13 +492,18 @@ class CrossAttnDownBlock3D(nn.Module):
                     )
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
                     cross_attention_kwargs=cross_attention_kwargs,
                 ).sample
-                hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
+
+                if num_frames > 1:
+                    hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
 
             output_states += (hidden_states,)
 
@@ -573,7 +583,9 @@ class DownBlock3D(nn.Module):
                 hidden_states = up_down_g_c(resnet, temp_conv, hidden_states, temb, num_frames)
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
 
             output_states += (hidden_states,)
 
@@ -711,13 +723,18 @@ class CrossAttnUpBlock3D(nn.Module):
                     )
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
                     cross_attention_kwargs=cross_attention_kwargs,
                 ).sample
-                hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
+
+                if num_frames > 1:
+                    hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
 
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
@@ -791,7 +808,9 @@ class UpBlock3D(nn.Module):
                 hidden_states = up_down_g_c(resnet, temp_conv, hidden_states, temb, num_frames)
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
 
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
