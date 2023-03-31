@@ -415,6 +415,9 @@ def main(
 
         latents = tensor_to_vae_latent(pixel_values, vae)
 
+        # Get video length
+        video_length = pixel_values.shape[1]
+
         # Sample noise that we'll add to the latents
         noise = sample_noise(latents, offset_noise_strength, use_offset_noise)
         bsz = latents.shape[0]
@@ -429,11 +432,26 @@ def main(
         
         # Enable text encoder training
         if train_encoder:
-            text_encoder.train()
-            cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)    
-            text_encoder.requires_grad_(True)
-        else:
-            text_encoder.requires_grad_(False)
+            
+            if global_step == 0:
+                cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
+
+            # This allows us to train over video frame data.
+            if global_step % 10 == 0 and noisy_latents.shape[2] > 1:
+
+                # Get random frame index to help prevent overfitting
+                frame_idx = random.randint(1, video_length)
+
+                # Single frame index of noisy latents
+                noisy_latents = noisy_latents[:, :, :frame_idx, :, :]
+                
+            # The text encoder doesn't have a temporal dimension, so we only train one frame.
+            if latents.shape[2] == 1: 
+                text_encoder.train()
+                text_encoder.requires_grad_(True)
+            else:
+                text_encoder.eval()
+                text_encoder.requires_grad_(False)
 
         enable_trainable_unet_modules(unet, trainable_modules, is_enabled=True)
 
