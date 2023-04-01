@@ -29,27 +29,35 @@ def read_caption_file(caption_file):
 
 def get_text_prompt(
         text_prompt: str = '', 
+        fallback_prompt: str= '',
         file_path:str = '', 
         ext_types=['.mp4'],
         use_caption=False
     ):
-    if use_caption:
-        caption_file = ''
-        # Use caption on per-video basis (One caption PER video)
-        for ext in ext_types:
-            maybe_file = file_path.replace(ext, '.txt')
-            if maybe_file.endswith(ext_types): continue
-            if os.path.exists(maybe_file): 
-                caption_file = maybe_file
-                break
+    try:
+        if use_caption:
+            caption_file = ''
+            # Use caption on per-video basis (One caption PER video)
+            for ext in ext_types:
+                maybe_file = file_path.replace(ext, '.txt')
+                if maybe_file.endswith(ext_types): continue
+                if os.path.exists(maybe_file): 
+                    caption_file = maybe_file
+                    break
 
-        if os.path.exists(caption_file):
-            return read_caption_file(caption_file)
-        
-        # Return text prompt if no conditions are met.
+            if os.path.exists(caption_file):
+                return read_caption_file(caption_file)
+            
+            # Return text prompt if no conditions are met.
+            if len(text_prompt) > 1:
+                return text_prompt
+            else:
+                return fallback_prompt
+
         return text_prompt
-
-    return text_prompt
+    except:
+        print(f"Couldn't read prompt caption for {file_path}. Using fallback.")
+        return fallback_prompt
 
 def path_or_prompt(caption_path, prompt):
     if os.path.exists(self.single_caption_path):
@@ -68,7 +76,7 @@ class VideoJsonDataset(Dataset):
             n_sample_frames: int = 4,
             n_sample_frames_min: int = 1,
             sample_start_idx: int = 0,
-            sample_frame_rate: int = 1,
+            frame_skip: int = 1,
             json_path: str ="./data",
             vid_data_key: str = "video_path",
             preprocessed: bool = False,
@@ -96,8 +104,8 @@ class VideoJsonDataset(Dataset):
         self.n_sample_frames = n_sample_frames
         self.n_sample_frames_min = n_sample_frames_min
         self.sample_start_idx = sample_start_idx
-        self.sample_frame_rate = sample_frame_rate
-        self.sample_frame_rate_init = sample_frame_rate
+        self.frame_skip = frame_skip
+        self.sample_frame_rate_init = frame_skip
 
     def load_from_json(self, path):
         try:
@@ -125,7 +133,7 @@ class VideoJsonDataset(Dataset):
 
     def get_frame_range(self, idx, vr):
         frames = self.get_sample_frame()
-        return list(range(idx, len(vr), self.sample_frame_rate))[:frames]
+        return list(range(idx, len(vr), self.frame_skip))[:frames]
     
     def get_sample_idx(self, idx, vr):
         # Get the frame idx range based on the get_vid_idx function
@@ -247,7 +255,7 @@ class SingleVideoDataset(Dataset):
             base_width: int = 256,
             base_height: int = 256,
             n_sample_frames: int = 4,
-            sample_frame_rate: int = 1,
+            frame_skip: int = 1,
             use_random_start_idx: bool = False,
             single_video_path: str = "",
             single_video_prompt: str = "",
@@ -261,7 +269,7 @@ class SingleVideoDataset(Dataset):
         self.use_bucketing = use_bucketing
         
         self.n_sample_frames = n_sample_frames
-        self.sample_frame_rate = sample_frame_rate
+        self.frame_skip = frame_skip
         self.use_random_start_idx = use_random_start_idx
 
         self.single_video_path = single_video_path
@@ -271,8 +279,7 @@ class SingleVideoDataset(Dataset):
         self.width = width
         self.height = height
         self.curr_video = None
-        self.sample_frame_rate = sample_frame_rate
-        self.sample_frame_rate_init = sample_frame_rate
+        self.sample_frame_rate_init = frame_skip
 
     def get_sample_frame(self):
         return self.n_sample_frames
@@ -282,11 +289,11 @@ class SingleVideoDataset(Dataset):
         if self.use_random_start_idx:
             
             # Randomize the frame rate at different speeds
-            self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
+            self.frame_skip = random.randint(1, self.frame_skip)
 
             # Randomize start frame so that we can train over multiple parts of the video
             random.seed()
-            max_sample_rate = abs((frames - self.sample_frame_rate) + 2)
+            max_sample_rate = abs((frames - self.frame_skip) + 2)
             max_frame = abs(len(vr) - max_sample_rate)
             idx = random.randint(1, max_frame)
             
@@ -300,7 +307,7 @@ class SingleVideoDataset(Dataset):
 
     def get_frame_range(self, idx, vr):
         frames = self.get_sample_frame()
-        return list(range(idx, len(vr), self.sample_frame_rate))[:frames]
+        return list(range(idx, len(vr), self.frame_skip))[:frames]
     
     def get_sample_idx(self, idx, vr):
         # Get the frame idx range based on the get_vid_idx function
@@ -393,6 +400,7 @@ class ImageDataset(Dataset):
         image_dir: str = '',
         single_caption_path: str = '',
         use_bucketing: bool = False,
+        fallback_prompt: str = '',
         **kwargs
     ):
         self.tokenizer = tokenizer
@@ -400,6 +408,7 @@ class ImageDataset(Dataset):
         self.use_bucketing = use_bucketing
 
         self.image_dir = self.get_images_list(image_dir)
+        self.fallback_prompt = fallback_prompt
 
         self.use_caption = use_caption
         self.single_caption_path = single_caption_path
@@ -438,6 +447,7 @@ class ImageDataset(Dataset):
 
         prompt = get_text_prompt(
             file_path=train_data,
+            fallback_prompt=self.fallback_prompt,
             ext_types=self.img_types,  
             use_caption=True
         )
