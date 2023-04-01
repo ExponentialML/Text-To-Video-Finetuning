@@ -27,7 +27,7 @@ train_data:
 
   # This will find the closest aspect ratio to your input width and height. 
   # For example, 512x512 width and height with a video of resolution 1280x720 will be resized to 512x256
-  use_bucketing: False
+  use_bucketing: True
 
   # The start frame index where your videos should start (Leave this at zero for json and folder based training).
   sample_start_idx: 0
