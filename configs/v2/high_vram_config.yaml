@@ -5,7 +5,7 @@ pretrained_model_path: "./models/model_scope_diffusers/" #https://huggingface.co
 output_dir: "./outputs"
 
 # Train the text encoder. Experimental and only trains on one frame if video.
-train_text_encoder: False
+train_text_encoder: True
 
 # 'image' | 'folder' | 'json' | 'single_video'
 dataset_types: 
@@ -22,8 +22,8 @@ use_offset_noise: False
 train_data:
 
   # The width and height in which you want your training data to be resized to.
-  width: 256      
-  height: 256
+  width: 384      
+  height: 384
 
   # This will find the closest aspect ratio to your input width and height. 
   # For example, 512x512 width and height with a video of resolution 1280x720 will be resized to 512x256
@@ -33,10 +33,10 @@ train_data:
   sample_start_idx: 0
 
   # The rate at which your frames are sampled. 'folder' samples FPS like, 'json' and 'single_video' act as frame skip.
-  sample_frame_rate: 30
+  sample_frame_rate: 1
 
   # The number of frames to sample. The higher this number, the higher the VRAM (acts similar to batch size).
-  n_sample_frames: 4
+  n_sample_frames: 8
   
   # 'single_video'
   single_video_path: "path/to/single/video.mp4"
@@ -66,8 +66,8 @@ validation_data:
   num_frames: 16
 
   # Height and width of validation sample.
-  width: 256
-  height: 256
+  width: 384
+  height: 384
 
   # Number of inference steps when generating the video.
   num_inference_steps: 50
