@@ -7,6 +7,7 @@ dataset_types:
 train_data:
   width: 256      
   height: 256
+  use_bucketing: False
   sample_start_idx: 0
   sample_frame_rate: 30
   vid_data_key: "video_path"

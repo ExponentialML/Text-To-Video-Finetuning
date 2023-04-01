@@ -10,6 +10,7 @@ decord.bridge.set_bridge('torch')
 from torch.utils.data import Dataset
 from einops import rearrange
 from glob import glob
+from bucketing import sensible_buckets
 
 def get_prompt_ids(prompt, tokenizer):
     prompt_ids = tokenizer(
@@ -71,9 +72,11 @@ class VideoJsonDataset(Dataset):
             json_path: str ="./data",
             vid_data_key: str = "video_path",
             preprocessed: bool = False,
+            use_bucketing: bool = False,
             **kwargs
     ):
         self.vid_types = (".mp4", ".avi", ".mov", ".webm", ".flv", ".mjpeg")
+        self.use_bucketing = use_bucketing
 
         self.tokenizer = tokenizer
         self.preprocessed = preprocessed
@@ -163,7 +166,18 @@ class VideoJsonDataset(Dataset):
         # load and sample video frames
 
         width, height = self.get_width_height()
-        vr = decord.VideoReader(train_data[self.vid_data_key], width=width, height=height)
+
+         # Get closest aspect ratio bucket.
+        if self.use_bucketing:
+            vrm = decord.VideoReader(train_data[self.vid_data_key])
+            h, w, _ = vrm[0].shape
+
+            width, height = sensible_buckets(self.width, self.height, w, h)
+            vr = decord.VideoReader(train_data[self.vid_data_key], width=width, height=height)
+
+            del vrm
+        else:
+            vr = decord.VideoReader(train_data[self.vid_data_key], width=self.width, height=self.height)
 
         # Pick a random video from the dataset
         vid_data = random.choice(train_data['data'])
@@ -239,10 +253,13 @@ class SingleVideoDataset(Dataset):
             single_video_prompt: str = "",
             use_caption: bool = False,
             single_caption_path: str = "",
+            use_bucketing: bool = False,
             **kwargs
     ):
         self.tokenizer = tokenizer
         self.vid_types = (".mp4", ".avi", ".mov", ".webm", ".flv", ".mjpeg")
+        self.use_bucketing = use_bucketing
+        
         self.n_sample_frames = n_sample_frames
         self.sample_frame_rate = sample_frame_rate
         self.use_random_start_idx = use_random_start_idx
@@ -305,7 +322,18 @@ class SingleVideoDataset(Dataset):
         if train_data.endswith(self.vid_types):
 
             if self.curr_video is None:
-                self.curr_video = decord.VideoReader(train_data, width=self.width, height=self.height)
+               # Get closest aspect ratio bucket.
+                if self.use_bucketing:
+                    vrm = decord.VideoReader(train_data)
+                    h, w, _ = vrm[0].shape
+
+                    width, height = sensible_buckets(self.width, self.height, w, h)
+                    self.curr_video = decord.VideoReader(train_data, width=width, height=height)
+
+                    del vrm
+                else:
+                    self.curr_video  = decord.VideoReader(train_data, width=self.width, height=self.height)
+
             # Load and sample video frames
             vr = self.curr_video
 
@@ -364,10 +392,13 @@ class ImageDataset(Dataset):
         use_caption: bool = False,
         image_dir: str = '',
         single_caption_path: str = '',
+        use_bucketing: bool = False,
         **kwargs
     ):
         self.tokenizer = tokenizer
         self.img_types = (".png", ".jpg", ".jpeg", '.bmp')
+        self.use_bucketing = use_bucketing
+
         self.image_dir = self.get_images_list(image_dir)
 
         self.use_caption = use_caption
@@ -396,8 +427,9 @@ class ImageDataset(Dataset):
         width = self.width
         height = self.height
 
-        if img.shape[2] > img.shape[1]:
-            height = abs(self.height - 192)
+        if self.use_bucketing:
+            _, h, w = img.shape
+            width, height = sensible_buckets(width, height, w, h)
               
         resize = T.transforms.Resize((height, width), antialias=True)
 
@@ -453,9 +485,11 @@ class VideoFolderDataset(Dataset):
         fps: int = 8,
         path: str = "./data",
         fallback_prompt: str = "",
+        use_bucketing: bool = False,
         **kwargs
     ):
         self.tokenizer = tokenizer
+        self.use_bucketing = use_bucketing
 
         self.fallback_prompt = fallback_prompt
 
@@ -483,7 +517,18 @@ class VideoFolderDataset(Dataset):
         return len(self.video_files)
 
     def __getitem__(self, index):
-        vr = decord.VideoReader(self.video_files[index], width=self.width, height=self.height)
+        # Get closest aspect ratio bucket.
+        if self.use_bucketing:
+            vrm = decord.VideoReader(self.video_files[index])
+            h, w, _ = vrm[0].shape
+
+            width, height = sensible_buckets(self.width, self.height, w, h)
+            vr = decord.VideoReader(self.video_files[index], width=width, height=height)
+
+            del vrm
+        else:
+            vr = decord.VideoReader(self.video_files[index], width=self.width, height=self.height)
+
         native_fps = vr.get_avg_fps()
         every_nth_frame = round(native_fps / self.fps)
 

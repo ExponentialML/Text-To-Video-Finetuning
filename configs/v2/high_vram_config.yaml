@@ -25,6 +25,10 @@ train_data:
   width: 256      
   height: 256
 
+  # This will find the closest aspect ratio to your input width and height. 
+  # For example, 512x512 width and height with a video of resolution 1280x720 will be resized to 512x256
+  use_bucketing: False
+
   # The start frame index where your videos should start (Leave this at zero for json and folder based training).
   sample_start_idx: 0
 
@@ -33,10 +37,13 @@ train_data:
 
   # The number of frames to sample. The higher this number, the higher the VRAM (acts similar to batch size).
   n_sample_frames: 4
-
+  
   # 'single_video'
   single_video_path: "path/to/single/video.mp4"
 
+  # Fallback prompt for folder of videos
+  fallback_prompt: ''
+  
   # 'folder'
   path: "path/to/folder/of/videos/"
 
