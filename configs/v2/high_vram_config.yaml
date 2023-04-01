@@ -79,7 +79,7 @@ validation_data:
 learning_rate: 1e-5
 
 # Weight decay. Higher = more regularization. Lower = closer to dataset.
-adam_weight_decay: 1e-2
+adam_weight_decay: 0
 
 # How many batches to train. Not to be confused with video frames.
 train_batch_size: 1
