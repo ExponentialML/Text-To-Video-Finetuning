@@ -8,10 +8,8 @@ train_data:
   width: 256      
   height: 256
   use_bucketing: False
-  sample_start_idx: 0
-  sample_frame_rate: 30
-  vid_data_key: "video_path"
   image_dir: './train/images'
+  single_caption_path: ""
 
 validation_data:
   prompt: ""

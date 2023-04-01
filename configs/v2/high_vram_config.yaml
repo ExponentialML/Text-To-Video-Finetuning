@@ -32,8 +32,11 @@ train_data:
   # The start frame index where your videos should start (Leave this at zero for json and folder based training).
   sample_start_idx: 0
 
-  # The rate at which your frames are sampled. 'folder' samples FPS like, 'json' and 'single_video' act as frame skip.
+  # The rate at which your frames are sampled. Does nothing for 'json' dataset.
   sample_frame_rate: 1
+
+  # For 'json' and 'single_video'. The number of frames to skip on the 'json' dataset.  
+  frame_skip: 1
 
   # The number of frames to sample. The higher this number, the higher the VRAM (acts similar to batch size).
   n_sample_frames: 8
@@ -41,7 +44,10 @@ train_data:
   # 'single_video'
   single_video_path: "path/to/single/video.mp4"
 
-  # Fallback prompt for folder of videos
+  # Only enabled for `single_video` and 'image'. Reads one caption file '.txt' and applies it to all videos/images.
+  single_caption_path: ""
+
+  # Fallback prompt if caption cannot be read. Enabled for 'image' and 'folder'.
   fallback_prompt: ''
   
   # 'folder'
