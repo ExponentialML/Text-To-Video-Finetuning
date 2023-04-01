@@ -95,16 +95,29 @@ validation_steps: 100
 
 # Which modules we want to unfreeze for the UNET. Advanced usage.
 trainable_modules:
+
+  # If you want to ignore temporal attention entirely, remove "attn1-2" and replace with ".attentions"
+  # This is for self attetion. Activates for spatial and temporal dimensions if n_sample_frames > 1
   - "attn1"
+  
+  # This is for cross attention (image & text data). Activates for spatial and temporal dimensions if n_sample_frames > 1
   - "attn2"
+  
+  #  Convolution networks that hold temporal information. Activates for spatial and temporal dimensions if n_sample_frames > 1
   - 'temp_conv'
+  
+  # If you're training at lower or higher res, unfreezing these may improve coherency
+  # - "upsamplers"
+  # - "downsamplers"
 
 # Seed for validation.
 seed: 64
 
 # Whether or not we want to use mixed precision with accelerate
 mixed_precision: "fp16"
-use_8bit_adam: False # This seems to be incompatible at the moment.
+
+# This seems to be incompatible at the moment.
+use_8bit_adam: False 
 
 # Trades VRAM usage for speed. You lose roughly 20% of training speed, but save a lot of VRAM.
 gradient_checkpointing: True
