@@ -84,7 +84,18 @@ def load_primary_models(pretrained_model_path):
     tokenizer = CLIPTokenizer.from_pretrained(pretrained_model_path, subfolder="tokenizer")
     text_encoder = CLIPTextModel.from_pretrained(pretrained_model_path, subfolder="text_encoder")
     vae = AutoencoderKL.from_pretrained(pretrained_model_path, subfolder="vae")
-    unet = UNet3DConditionModel.from_pretrained(pretrained_model_path, subfolder="unet")
+
+    unet = UNet3DConditionModel()
+
+    model_path = os.path.join(os.getcwd(), pretrained_model_path, 'unet', 'diffusion_pytorch_model.bin')
+    # Load the pretrained weights
+    pretrained_dict = torch.load(
+        model_path,
+        map_location=torch.device('cuda'),
+    )
+    unet.load_state_dict(pretrained_dict, strict=False)
+
+    unet.infinet._init_weights()
 
     return noise_scheduler, tokenizer, text_encoder, vae, unet
 
@@ -222,7 +233,7 @@ def main(
     train_data: Dict,
     validation_data: Dict,
     validation_steps: int = 100,
-    trainable_modules: Tuple[str] = ("attn1", "attn2" ),
+    trainable_modules: Tuple[str] = ("attn1", "attn2", "infinet"),
     train_batch_size: int = 1,
     max_train_steps: int = 500,
     learning_rate: float = 5e-5,
@@ -318,7 +329,7 @@ def main(
     if train_data.pop("type", "regular") == "folder":
         train_dataset = VideoFolderDataset(**train_data, tokenizer=tokenizer)
     else:
-        train_dataset = VideoDataset(**train_data, tokenizer=tokenizer)
+        train_dataset = VideoDataset(**train_data, tokenizer=tokenizer, train_infinet='infinet' in trainable_modules if trainable_modules is not None else False)
 
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(
@@ -391,6 +402,9 @@ def main(
         #noise_scheduler.beta_schedule = "squaredcos_cap_v2"
         
         unet.train()
+
+        # Set up diffusion depth for infinet training
+        unet.infinet.diffusion_depth = batch["diffusion_depth"]
         
         # Convert videos to latent space
         pixel_values = batch["pixel_values"].to(weight_dtype)

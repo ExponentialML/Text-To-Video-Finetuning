@@ -34,6 +34,7 @@ validation_steps: 100
 trainable_modules:
   - "attn1.to_out"
   - "attn2.to_out"
+  - "infinet"
 seed: 64
 mixed_precision: "fp16"
 use_8bit_adam: False # This seems to be incompatible at the moment. 

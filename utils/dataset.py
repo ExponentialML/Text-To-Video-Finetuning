@@ -26,6 +26,7 @@ class VideoDataset(Dataset):
             preprocessed: bool = False,
             single_video_path: str = "",
             single_video_prompt: str = "",
+            train_infinet = False,
             **kwargs
     ):
 
@@ -48,6 +49,8 @@ class VideoDataset(Dataset):
         self.sample_start_idx = sample_start_idx
         self.sample_frame_rate = sample_frame_rate
         self.sample_frame_rate_init = sample_frame_rate
+
+        self.train_infinet = train_infinet
 
     def load_from_json(self, path):
         # Don't load a JSON file if we're doing single video training
@@ -107,7 +110,7 @@ class VideoDataset(Dataset):
         
     def get_vid_idx(self, vr, vid_data=None):
 
-        if self.use_random_start_idx and self.n_sample_frames == 1:
+        if self.use_random_start_idx and self.n_sample_frames == 1 and not self.train_infinet:
             
             # Randomize the frame rate at different speeds
             self.sample_frame_rate = random.randint(1, self.sample_frame_rate_init)
@@ -119,6 +122,7 @@ class VideoDataset(Dataset):
             idx = random.randint(1, max_frame)
             
         else:
+
             if vid_data is not None:
                 idx = vid_data['frame_index']
             else:
@@ -187,6 +191,9 @@ class VideoDataset(Dataset):
             # Get video prompt
             prompt = vid_data['prompt']
 
+            # Get diffusion depth for training Infinet
+            diffusion_depth = vid_data['diffusion_depth'] if 'diffusion_depth' in vid_data.keys() else 0
+
             video = vr.get_batch(sample_index)
             video = rearrange(video, "f h w c -> f c h w")
 
@@ -195,7 +202,8 @@ class VideoDataset(Dataset):
         example = {
             "pixel_values": (video / 127.5 - 1.0),
             "prompt_ids": prompt_ids[0],
-            "text_prompt": prompt
+            "text_prompt": prompt,
+            "diffusion_depth": diffusion_depth,
         }
 
         return example

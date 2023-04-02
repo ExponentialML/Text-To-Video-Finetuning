@@ -2,6 +2,7 @@ accelerate
 torch
 torchvision
 torchaudio
+imageio_ffmpeg
 git+https://github.com/huggingface/diffusers.git
 transformers
 einops
