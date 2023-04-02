@@ -437,14 +437,14 @@ def main(
                 cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
 
             # This allows us to train over video frame data.
-            if global_step % 10 == 0 and noisy_latents.shape[2] > 1:
+            if global_step % 2 == 0 and noisy_latents.shape[2] > 1:
 
                 # Get random frame index to help prevent overfitting
-                frame_idx = random.randint(1, video_length)
+                frame_idx = random.randint(1, video_length - 1)
 
                 # Single frame index of noisy latents
-                noisy_latents = noisy_latents[:, :, :frame_idx, :, :]
-                noise = noise[:, :, :frame_idx, :, :]
+                noisy_latents =  noisy_latents[:, :,frame_idx, :, :].unsqueeze(2)
+                noise = noise[:, :,frame_idx, :, :].unsqueeze(2)
                 
             # The text encoder doesn't have a temporal dimension, so we only train one frame.
             if latents.shape[2] == 1: 
