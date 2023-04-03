@@ -29,13 +29,13 @@ train_data:
   # For example, 512x512 width and height with a video of resolution 1280x720 will be resized to 512x256
   use_bucketing: True
 
-  # The start frame index where your videos should start (Leave this at zero for json and folder based training).
-  sample_start_idx: 0
+  # The start frame index where your videos should start (Leave this at one for json and folder based training).
+  sample_start_idx: 1
 
   # The rate at which your frames are sampled. Does nothing for 'json' dataset.
   sample_frame_rate: 1
 
-  # For 'json' and 'single_video'. The number of frames to skip on the 'json' dataset.  
+  # For 'single_video'. The number of frames to skip on the 'json' dataset.  
   frame_skip: 1
 
   # The number of frames to sample. The higher this number, the higher the VRAM (acts similar to batch size).
