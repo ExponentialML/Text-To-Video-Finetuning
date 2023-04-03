@@ -78,7 +78,7 @@ def get_video_frames(vr, start_idx, sample_rate=1, max_frames=24):
 
     return frame_range_indices
 
-def process_video(w, h, get_frame_buckets, get_frame_batch, vid_path):
+def process_video(vid_path, use_bucketing, w, h, get_frame_buckets, get_frame_batch):
     if use_bucketing:
         vr = decord.VideoReader(vid_path)
         resize = get_frame_buckets(vr)
@@ -207,12 +207,13 @@ class VideoJsonDataset(Dataset):
             # Get video prompt
             prompt = vid_data['prompt']
 
-            video, _ = process_video(
+            video, vr = process_video(
+                train_data[self.vid_data_key],
+                self.use_bucketing,
                 self.width, 
                 self.height, 
                 self.get_frame_buckets, 
                 self.get_frame_batch, 
-                clip_path
             )
 
             prompt_ids = prompt_ids = get_prompt_ids(prompt, self.tokenizer)
