@@ -101,7 +101,7 @@ class VideoJsonDataset(Dataset):
             base_height: int = 256,
             n_sample_frames: int = 4,
             sample_start_idx: int = 1,
-            sample_frame_rate: int = 1,
+            frame_step: int = 1,
             json_path: str ="./data",
             json_data = None,
             vid_data_key: str = "video_path",
@@ -124,7 +124,7 @@ class VideoJsonDataset(Dataset):
 
         self.n_sample_frames = n_sample_frames
         self.sample_start_idx = sample_start_idx
-        self.sample_frame_rate = sample_frame_rate
+        self.frame_step = frame_step
 
     def build_json(self, json_data):
         extended_data = []
@@ -166,7 +166,7 @@ class VideoJsonDataset(Dataset):
         return get_video_frames(
             vr, 
             self.sample_start_idx, 
-            self.sample_frame_rate, 
+            self.frame_step, 
             self.n_sample_frames
         )
     
@@ -206,6 +206,7 @@ class VideoJsonDataset(Dataset):
             )
         
         return video, vr 
+
     def train_data_batch(self, index):
 
         # If we are training on individual clips.
@@ -277,7 +278,7 @@ class SingleVideoDataset(Dataset):
             width: int = 256,
             height: int = 256,
             n_sample_frames: int = 4,
-            sample_frame_rate: int = 1,
+            frame_step: int = 1,
             single_video_path: str = "",
             single_video_prompt: str = "",
             use_caption: bool = False,
@@ -292,7 +293,7 @@ class SingleVideoDataset(Dataset):
 
         self.vid_types = (".mp4", ".avi", ".mov", ".webm", ".flv", ".mjpeg")
         self.n_sample_frames = n_sample_frames
-        self.sample_frame_rate = sample_frame_rate
+        self.frame_step = frame_step
 
         self.single_video_path = single_video_path
         self.single_video_prompt = single_video_prompt
@@ -300,13 +301,11 @@ class SingleVideoDataset(Dataset):
 
         self.width = width
         self.height = height
-        self.sample_frame_rate = sample_frame_rate
-
     def create_video_chunks(self):
         # Create a list of frames separated by sample frames
         # [(1,2,3), (4,5,6), ...]
         vr = decord.VideoReader(self.single_video_path)
-        vr_range = range(1, len(vr), self.sample_frame_rate)
+        vr_range = range(1, len(vr), self.frame_step)
 
         self.frames = list(self.chunk(vr_range, self.n_sample_frames))
 
@@ -532,6 +531,43 @@ class VideoFolderDataset(Dataset):
         self.n_sample_frames = n_sample_frames
         self.fps = fps
 
+    def get_frame_buckets(self, vr):
+        _, h, w = vr[0].shape        
+        width, height = sensible_buckets(self.width, self.height, h, w)
+        resize = T.transforms.Resize((height, width), antialias=True)
+
+        return resize
+
+    def get_frame_batch(self, vr, resize=None):
+        native_fps = vr.get_avg_fps()
+        every_nth_frame = round(native_fps / self.fps)
+
+        effective_length = len(vr) // every_nth_frame
+
+        if effective_length < self.n_sample_frames:
+            return self.__getitem__(random.randint(0, len(self.video_files) - 1))
+
+        effective_idx = random.randint(0, effective_length - self.n_sample_frames)
+
+        idxs = every_nth_frame * np.arange(effective_idx, effective_idx + self.n_sample_frames)
+
+        video = vr.get_batch(idxs)
+        video = rearrange(video, "f h w c -> f c h w")
+
+        if resize is not None: video = resize(video)
+        return video, vr
+        
+    def process_video_wrapper(self, vid_path):
+        video, vr = process_video(
+                vid_path,
+                self.use_bucketing,
+                self.width, 
+                self.height, 
+                self.get_frame_buckets, 
+                self.get_frame_batch
+            )
+        return video, vr
+    
     def get_prompt_ids(self, prompt):
         return self.tokenizer(
             prompt,
@@ -548,32 +584,8 @@ class VideoFolderDataset(Dataset):
         return len(self.video_files)
 
     def __getitem__(self, index):
-        # Get closest aspect ratio bucket.
-        if self.use_bucketing:
-            vrm = decord.VideoReader(self.video_files[index])
-            h, w, _ = vrm[0].shape
 
-            width, height = sensible_buckets(self.width, self.height, w, h)
-            vr = decord.VideoReader(self.video_files[index], width=width, height=height)
-
-            del vrm
-        else:
-            vr = decord.VideoReader(self.video_files[index], width=self.width, height=self.height)
-
-        native_fps = vr.get_avg_fps()
-        every_nth_frame = round(native_fps / self.fps)
-
-        effective_length = len(vr) // every_nth_frame
-
-        if effective_length < self.n_sample_frames:
-            return self.__getitem__(random.randint(0, len(self.video_files) - 1))
-
-        effective_idx = random.randint(0, effective_length - self.n_sample_frames)
-
-        idxs = every_nth_frame * np.arange(effective_idx, effective_idx + self.n_sample_frames)
-
-        video = vr.get_batch(idxs)
-        video = rearrange(video, "f h w c -> f c h w")
+        video, _ = process_video_wrapper(self.video_files[index])
 
         if os.path.exists(self.video_files[index].replace(".mp4", ".txt")):
             with open(self.video_files[index].replace(".mp4", ".txt"), "r") as f:
