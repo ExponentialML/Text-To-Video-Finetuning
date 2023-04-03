@@ -195,6 +195,17 @@ class VideoJsonDataset(Dataset):
         if resize is not None: video = resize(video)
         return video
 
+    def process_video_wrapper(self, vid_path):
+        video, vr = process_video(
+                vid_path,
+                self.use_bucketing,
+                self.width, 
+                self.height, 
+                self.get_frame_buckets, 
+                self.get_frame_batch
+            )
+        
+        return video, vr 
     def train_data_batch(self, index):
 
         # If we are training on individual clips.
@@ -207,14 +218,7 @@ class VideoJsonDataset(Dataset):
             # Get video prompt
             prompt = vid_data['prompt']
 
-            video, vr = process_video(
-                train_data[self.vid_data_key],
-                self.use_bucketing,
-                self.width, 
-                self.height, 
-                self.get_frame_buckets, 
-                self.get_frame_batch, 
-            )
+            video, _ = self.process_video_wrapper(clip_path)
 
             prompt_ids = prompt_ids = get_prompt_ids(prompt, self.tokenizer)
 
@@ -226,13 +230,7 @@ class VideoJsonDataset(Dataset):
         # Initialize resize
         resize = None
 
-        video, vr = process_video(
-                self.width, 
-                self.height, 
-                self.get_frame_buckets, 
-                self.get_frame_batch, 
-                train_data[self.vid_data_key]
-            )
+        video, vr = self.process_video_wrapper(train_data[self.vid_data_key])
 
         # Get video prompt
         prompt = train_data['prompt']
