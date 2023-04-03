@@ -276,11 +276,8 @@ class SingleVideoDataset(Dataset):
             tokenizer = None,
             width: int = 256,
             height: int = 256,
-            base_width: int = 256,
-            base_height: int = 256,
             n_sample_frames: int = 4,
-            frame_skip: int = 1,
-            use_random_start_idx: bool = False,
+            sample_frame_rate: int = 1,
             single_video_path: str = "",
             single_video_prompt: str = "",
             use_caption: bool = False,
@@ -289,12 +286,13 @@ class SingleVideoDataset(Dataset):
             **kwargs
     ):
         self.tokenizer = tokenizer
-        self.vid_types = (".mp4", ".avi", ".mov", ".webm", ".flv", ".mjpeg")
         self.use_bucketing = use_bucketing
-        
+        self.frames = []
+        self.index = 1
+
+        self.vid_types = (".mp4", ".avi", ".mov", ".webm", ".flv", ".mjpeg")
         self.n_sample_frames = n_sample_frames
-        self.frame_skip = frame_skip
-        self.use_random_start_idx = use_random_start_idx
+        self.sample_frame_rate = sample_frame_rate
 
         self.single_video_path = single_video_path
         self.single_video_prompt = single_video_prompt
@@ -302,90 +300,89 @@ class SingleVideoDataset(Dataset):
 
         self.width = width
         self.height = height
-        self.curr_video = None
-        self.sample_frame_rate_init = frame_skip
+        self.sample_frame_rate = sample_frame_rate
 
-    def get_sample_frame(self):
-        return self.n_sample_frames
+    def create_video_chunks(self):
+        # Create a list of frames separated by sample frames
+        # [(1,2,3), (4,5,6), ...]
+        vr = decord.VideoReader(self.single_video_path)
+        vr_range = range(1, len(vr), self.sample_frame_rate)
 
-    def get_vid_idx(self, vr, vid_data=None):
-        frames = self.get_sample_frame()
-        if self.use_random_start_idx:
-            
-            # Randomize the frame rate at different speeds
-            self.frame_skip = random.randint(1, self.frame_skip)
+        self.frames = list(self.chunk(vr_range, self.n_sample_frames))
 
-            # Randomize start frame so that we can train over multiple parts of the video
-            random.seed()
-            max_sample_rate = abs((frames - self.frame_skip) + 2)
-            max_frame = abs(len(vr) - max_sample_rate)
-            idx = random.randint(1, max_frame)
-            
-        else:
-            if vid_data is not None:
-                idx = vid_data['frame_index']
-            else:
-                idx = 1
+        # Delete any list that contains an out of range index.
+        for i, inner_frame_nums in enumerate(self.frames):
+            for frame_num in inner_frame_nums:
+                if frame_num > len(vr):
+                    print(f"Removing out of range index list at position: {i}...")
+                    del self.frames[i]
 
-        return idx
+        return self.frames
 
-    def get_frame_range(self, idx, vr):
-        frames = self.get_sample_frame()
-        return list(range(idx, len(vr), self.frame_skip))[:frames]
+    def chunk(self, it, size):
+        it = iter(it)
+        return iter(lambda: tuple(islice(it, size)), ())
+
+    def get_frame_batch(self, vr, resize=None):
+        index = self.index
+        frames = vr.get_batch(self.frames[self.index])
+        video = rearrange(frames, "f h w c -> f c h w")
+
+        if resize is not None: video = resize(video)
+        return video
+
+    def get_frame_buckets(self, vr):
+        _, h, w = vr[0].shape        
+        width, height = sensible_buckets(self.width, self.height, h, w)
+        resize = T.transforms.Resize((height, width), antialias=True)
+
+        return resize
     
-    def get_sample_idx(self, idx, vr):
-        # Get the frame idx range based on the get_vid_idx function
-        # We have a fallback here just in case we the frame cannot be read
-        sample_idx = self.get_frame_range(idx, vr)
-        fallback = self.get_frame_range(1, vr)
+    def process_video_wrapper(self, vid_path):
+        video, vr = process_video(
+                vid_path,
+                self.use_bucketing,
+                self.width, 
+                self.height, 
+                self.get_frame_buckets, 
+                self.get_frame_batch
+            )
         
-        # Return the result from the get_vid_idx function. This will error out if it cannot be read.
-        try:
-            vr.get_batch(sample_idx)
-            return sample_idx
+        return video, vr 
 
-        # Return the fallback frame range if it fails
-        except:
-            return fallback
-
-    def single_video_batch(self):
+    def single_video_batch(self, index):
         train_data = self.single_video_path
+        self.index = index
+
         if train_data.endswith(self.vid_types):
+            video, _ = self.process_video_wrapper(train_data)
 
-            if self.curr_video is None:
-               # Get closest aspect ratio bucket.
-                if self.use_bucketing:
-                    vrm = decord.VideoReader(train_data)
-                    h, w, _ = vrm[0].shape
+            prompt = path_or_prompt(self.single_caption_path, self.single_video_prompt)
+            prompt_ids = get_prompt_ids(prompt, self.tokenizer)
 
-                    width, height = sensible_buckets(self.width, self.height, w, h)
-                    self.curr_video = decord.VideoReader(train_data, width=width, height=height)
+            return video, prompt, prompt_ids
+        else:
+            raise ValueError(f"Single video is not a video type. Types: {self.vid_types}")
+    
+    @staticmethod
+    def __getname__(): return 'single_video'
 
-                    del vrm
-                else:
-                    self.curr_video  = decord.VideoReader(train_data, width=self.width, height=self.height)
+    def __len__(self):
+        
+        return len(self.create_video_chunks())
 
-            # Load and sample video frames
-            vr = self.curr_video
+    def __getitem__(self, index):
 
-            idx = self.get_vid_idx(vr)
+        video, prompt, prompt_ids = self.single_video_batch(index)
 
-            # Check if idx is greater than the length of the video.
-            if idx >= len(vr):
-                idx = 1
-                
-            # Resolve sample index
-            sample_index = self.get_sample_idx(idx, vr)
+        example = {
+            "pixel_values": (video / 127.5 - 1.0),
+            "prompt_ids": prompt_ids[0],
+            "text_prompt": prompt,
+            'dataset': self.__getname__()
+        }
 
-            # Process video and rearrange
-            video = vr.get_batch(sample_index)
-            video = rearrange(video, "f h w c -> f c h w")
-
-
-        prompt = path_or_prompt(self.single_caption_path, self.single_video_prompt)
-        prompt_ids = get_prompt_ids(prompt, self.tokenizer)
-
-        return video, prompt, prompt_ids
+        return example
     
     @staticmethod
     def __getname__(): return 'single_video'
