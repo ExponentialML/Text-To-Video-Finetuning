@@ -97,8 +97,6 @@ class VideoJsonDataset(Dataset):
             tokenizer = None,
             width: int = 256,
             height: int = 256,
-            base_width: int = 256,
-            base_height: int = 256,
             n_sample_frames: int = 4,
             sample_start_idx: int = 1,
             frame_step: int = 1,
