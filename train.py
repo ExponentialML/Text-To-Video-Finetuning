@@ -203,7 +203,7 @@ def sample_noise(latents, noise_strength, use_offset_noise):
 
     if use_offset_noise:
         offset_noise = torch.randn(b, c, f, 1, 1, device=latents.device)
-        noise = noise_latents + noise_strength * offset_noise
+        noise_latents = noise_latents + noise_strength * offset_noise
 
     return noise_latents
 
