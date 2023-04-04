@@ -315,6 +315,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
             fn_recursive_set_attention_slice(module, reversed_slice_size)
 
     def _set_gradient_checkpointing(self, value=False):
+        self.mid_block.gradient_checkpointing = value
         for module in self.down_blocks + self.up_blocks:
             if isinstance(module, (CrossAttnDownBlock3D, DownBlock3D, CrossAttnUpBlock3D, UpBlock3D)):
                 module.gradient_checkpointing = value
