@@ -270,6 +270,7 @@ def main(
     max_grad_norm: float = 1.0,
     gradient_accumulation_steps: int = 1,
     gradient_checkpointing: bool = False,
+    text_encoder_gradient_checkpointing: bool = False,
     checkpointing_steps: int = 500,
     resume_from_checkpoint: Optional[str] = None,
     mixed_precision: Optional[str] = "fp16",
@@ -387,7 +388,7 @@ def main(
 
     # Use Gradient Checkpointing if enabled.
     unet._set_gradient_checkpointing(value=gradient_checkpointing)
-    text_encoder._set_gradient_checkpointing(CLIPEncoder, value=gradient_checkpointing)
+    text_encoder._set_gradient_checkpointing(CLIPEncoder, value=text_encoder_gradient_checkpointing)
     
     # Enable VAE slicing to save memory.
     vae.enable_slicing()

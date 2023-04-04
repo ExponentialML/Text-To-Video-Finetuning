@@ -135,7 +135,9 @@ mixed_precision: "fp16"
 use_8bit_adam: False 
 
 # Trades VRAM usage for speed. You lose roughly 20% of training speed, but save a lot of VRAM.
+# If you need to save more VRAM, it can also be enabled for the text encoder, but reduces speed x2.
 gradient_checkpointing: True
+text_encoder_gradient_checkpointing: False
 
 # Xformers must be installed
 enable_xformers_memory_efficient_attention: True
