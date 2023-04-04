@@ -433,6 +433,13 @@ def main(
         
         unet.train()
         
+        # Create list for noisy latents
+        all_latents = []
+
+        # Initialize variables for storing single frame latents (text encoder training)
+        single_noisy_latents = None
+        single_target_latent = None
+        
         # Convert videos to latent space
         pixel_values = batch["pixel_values"].to(weight_dtype)
 
@@ -460,14 +467,14 @@ def main(
                 cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
 
             # This allows us to train over video frame data.
-            if global_step % 2 == 0 and noisy_latents.shape[2] > 1:
+            if video_length > 1:
 
                 # Get random frame index to help prevent overfitting
                 frame_idx = random.randint(1, video_length - 1)
 
                 # Single frame index of noisy latents
-                noisy_latents =  noisy_latents[:, :,frame_idx, :, :].unsqueeze(2)
-                noise = noise[:, :,frame_idx, :, :].unsqueeze(2)
+                single_noisy_latents =  noisy_latents[:, :,frame_idx, :, :].unsqueeze(2).clone()
+                single_target_latent = noise[:, :,frame_idx, :, :].unsqueeze(2).clone()
                 
             # The text encoder doesn't have a temporal dimension, so we only train one frame.
             if latents.shape[2] == 1: 
@@ -490,10 +497,24 @@ def main(
         else:
             raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
 
-        
         # Predict the noise residual and compute loss
-        model_pred = unet(noisy_latents, timesteps, encoder_hidden_states=encoder_hidden_states).sample
-        loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+        # Group the latents as tuples and process them.
+        noise_latent_groups = [(noisy_latents, target), (single_noisy_latents, single_target_latent)]
+        losses = []
+        
+        # Predict the noise on all latents, then add the losses if there are more than 1.
+        for i, latent in enumerate(noise_latent_groups):
+            if all(l is not None for l in latent):
+                model_pred = unet(latent[0], timesteps, encoder_hidden_states=encoder_hidden_states).sample
+                loss = F.mse_loss(model_pred.float(), latent[1].float(), reduction="mean")
+                losses.append(loss)
+                
+                del model_pred
+                del loss
+
+        loss = losses[0] if len(losses) == 1 else losses[0] + losses[1]
+
         return loss, latents
 
     for epoch in range(first_epoch, num_train_epochs):
