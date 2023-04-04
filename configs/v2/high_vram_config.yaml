@@ -7,7 +7,12 @@ output_dir: "./outputs"
 # Train the text encoder. Experimental and only trains on one frame if video.
 train_text_encoder: True
 
-# 'image' | 'folder' | 'json' | 'single_video'
+# You can train multiple datasets at once. They will be joined together for training.
+
+# 'image': A folder of images and captions (.txt)
+# 'folder': A folder a videos and captions (.txt)
+# 'json': The JSON file created with automatic BLIP2 captions using https://github.com/ExponentialML/Video-BLIP2-Preprocessor
+# 'single_video': A single video file.mp4 and text prompt
 dataset_types: 
   - 'image'
   - 'folder'
@@ -17,6 +22,10 @@ dataset_types:
 # Adds offset noise to training. See https://www.crosslabs.org/blog/diffusion-with-offset-noise
 offset_noise_strength: 0.1
 use_offset_noise: False
+
+# When True, this extends all items in all enabled datasets to the highest length. 
+# For example, if you have 200 videos and 10 images, 10 images will be duplicated to the length of 200. 
+extend_dataset: False
 
 # Training data parameters
 train_data:

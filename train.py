@@ -75,6 +75,24 @@ def get_train_dataset(dataset_types, train_data, tokenizer):
     else:
         raise ValueError("Dataset type not found: 'json', 'single_video', 'folder', 'image'")
 
+def extend_datasets(datasets, dataset_items, extend=False):
+    biggest_data_len = max(x.__len__() for x in datasets)
+    extended = []
+    for dataset in datasets:
+        if dataset.__len__() < biggest_data_len:
+            for item in dataset_items:
+                if extend and item not in extended and hasattr(dataset, item):
+                    print(f"Extending {item}")
+
+                    value = getattr(dataset, item)
+                    value *= biggest_data_len
+                    value = value[:biggest_data_len]
+
+                    setattr(dataset, item, value)
+
+                    print(f"New {item} dataset length: {dataset.__len__()}")
+                    extended.append(item)
+
 def export_to_video(video_frames, output_video_path, fps):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     h, w, _ = video_frames[0].shape
@@ -261,6 +279,7 @@ def main(
     train_text_encoder: bool = False,
     use_offset_noise: bool = False,
     offset_noise_strength: float = 0.1,
+    extend_dataset: bool = False,
     **kwargs
 ):
 
@@ -331,6 +350,10 @@ def main(
 
     # Get the training dataset based on types (json, single_video, image)
     train_datasets = get_train_dataset(dataset_types, train_data, tokenizer)
+
+    # Extend datasets that are less than the greatest one. This allows for more balanced training.
+    attrs = ['train_data', 'frames', 'image_dir', 'video_files']
+    extend_datasets(train_datasets, attrs, extend=extend_dataset)
 
     # Process one dataset
     if len(train_datasets) == 1:
