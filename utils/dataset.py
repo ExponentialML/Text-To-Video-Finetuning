@@ -9,7 +9,7 @@ import torch
 
 from itertools import islice
 from pathlib import Path
-from bucketing import sensible_buckets
+from .bucketing import sensible_buckets
 
 decord.bridge.set_bridge('torch')
 
