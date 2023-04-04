@@ -332,8 +332,19 @@ class UNetMidBlock3DCrossAttn(nn.Module):
         num_frames=1,
         cross_attention_kwargs=None,
     ):
-        hidden_states = self.resnets[0](hidden_states, temb)
-        hidden_states = self.temp_convs[0](hidden_states, num_frames=num_frames)
+        if self.gradient_checkpointing:
+            hidden_states = up_down_g_c(
+                    self.resnets[0], 
+                    self.temp_convs[0], 
+                    hidden_states, 
+                    temb, 
+                    num_frames,
+                    use_reentrant=self.use_reentrant
+                )
+        else:
+            hidden_states = self.resnets[0](hidden_states, temb)
+            hidden_states = self.temp_convs[0](hidden_states, num_frames=num_frames)
+            
         for attn, temp_attn, resnet, temp_conv in zip(
             self.attentions, self.temp_attentions, self.resnets[1:], self.temp_convs[1:]
         ):
