@@ -35,6 +35,7 @@ from diffusers.models.attention_processor import AttnProcessor2_0, Attention
 from diffusers.models.attention import BasicTransformerBlock
 
 from transformers import CLIPTextModel, CLIPTokenizer
+from transformers.models.clip.modeling_clip import CLIPEncoder
 from utils.dataset import VideoJsonDataset, SingleVideoDataset, ImageDataset, VideoFolderDataset
 from einops import rearrange, repeat
 
@@ -386,6 +387,7 @@ def main(
 
     # Use Gradient Checkpointing if enabled.
     unet._set_gradient_checkpointing(value=gradient_checkpointing)
+    text_encoder._set_gradient_checkpointing(CLIPEncoder, value=gradient_checkpointing)
     
     # Enable VAE slicing to save memory.
     vae.enable_slicing()
