@@ -9,7 +9,7 @@ import torch
 
 from itertools import islice
 from pathlib import Path
-from bucketing import sensible_buckets
+from .bucketing import sensible_buckets
 
 decord.bridge.set_bridge('torch')
 
@@ -103,7 +103,6 @@ class VideoJsonDataset(Dataset):
             json_path: str ="./data",
             json_data = None,
             vid_data_key: str = "video_path",
-            use_random_start_idx: bool = False,
             preprocessed: bool = False,
             use_bucketing: bool = False,
             **kwargs
@@ -115,7 +114,6 @@ class VideoJsonDataset(Dataset):
         
         self.vid_data_key = vid_data_key
         self.train_data = self.load_from_json(json_path, json_data)
-        self.use_random_start_idx = use_random_start_idx
 
         self.width = width
         self.height = height
