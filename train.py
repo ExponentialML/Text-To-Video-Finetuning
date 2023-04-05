@@ -39,7 +39,7 @@ from transformers.models.clip.modeling_clip import CLIPEncoder
 from utils.dataset import VideoJsonDataset, SingleVideoDataset, ImageDataset, VideoFolderDataset
 from einops import rearrange, repeat
 
-already_printed_unet = False
+already_printed_trainables = False
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.10.0.dev0")
@@ -202,21 +202,25 @@ def cast_to_gpu_and_type(model_list, accelerator, weight_dtype):
     for model in model_list:
         if model is not None: model.to(accelerator.device, dtype=weight_dtype)
 
-def enable_trainable_unet_modules(model, trainable_modules=None, is_enabled=True):
-    global already_printed_unet
+def handle_trainable_modules(model, trainable_modules=None, is_enabled=True):
+    global already_printed_trainables
 
     # This can most definitely be refactored :-)
     unfrozen_params = 0
     if trainable_modules is not None:
         for name, module in model.named_modules():
             for tm in tuple(trainable_modules):
+                if tm == 'all':
+                    model.requires_grad_(True)
+                    unfrozen_params =len(list(model.parameters()))
+                    break
                 if tm in name:
                     for m in module.parameters():
                         m.requires_grad_(is_enabled)
                         if is_enabled: unfrozen_params +=1
 
-    if unfrozen_params > 0 and not already_printed_unet:
-        already_printed_unet = True 
+    if unfrozen_params > 0 and not already_printed_trainables:
+        already_printed_trainables = True 
         print(f"{unfrozen_params} params have been unfrozen for training.")
 
 def tensor_to_vae_latent(t, vae):
@@ -256,7 +260,8 @@ def main(
     validation_data: Dict,
     dataset_types: Tuple[str] = ('json'),
     validation_steps: int = 100,
-    trainable_modules: Tuple[str] = ("attn1", "attn2" ),
+    trainable_modules: Tuple[str] = ("attn1", "attn2"),
+    trainable_text_modules: Tuple[str] = ("all"),
     train_batch_size: int = 1,
     max_train_steps: int = 500,
     learning_rate: float = 5e-5,
@@ -434,8 +439,6 @@ def main(
         # Set noise scheduler to cosine (this can be done via config, but this ensures it's enabled)
         #noise_scheduler.beta_schedule = "squaredcos_cap_v2"
         
-        unet.train()
-        
         # Create list for noisy latents
         all_latents = []
 
@@ -481,13 +484,21 @@ def main(
                 
             # The text encoder doesn't have a temporal dimension, so we only train one frame.
             if video_length == 1: 
+                if global_step == 0: 
+                    already_printed_trainables = False
+                    
                 text_encoder.train()
-                text_encoder.requires_grad_(True)
+                handle_trainable_modules(text_encoder, trainable_text_modules, is_enabled=True)
             else:
                 text_encoder.eval()
-                text_encoder.requires_grad_(False)
+                handle_trainable_modules(text_encoder, trainable_text_modules, is_enabled=False)
 
-        enable_trainable_unet_modules(unet, trainable_modules, is_enabled=True)
+        if global_step == 0:
+            if global_step == 0: 
+                already_printed_trainables = False
+
+            unet.train()
+            handle_trainable_modules(unet, trainable_modules, is_enabled=True)
 
         # Get the text embedding for conditioning
         encoder_hidden_states = text_encoder(batch['prompt_ids'])[0]

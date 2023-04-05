@@ -125,6 +125,10 @@ trainable_modules:
   # - "upsamplers"
   # - "downsamplers"
 
+# Which modules we want to unfreeze for the Text Encoder. Advanced usage.
+trainable_text_modules:
+  #- "all"
+
 # Seed for validation.
 seed: 64
 
