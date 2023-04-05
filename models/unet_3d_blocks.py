@@ -62,6 +62,13 @@ def custom_checkpoint(module, mode=None):
 
     return custom_forward
 
+def transformer_g_c(transformer, sample, num_frames):
+    sample = g_c(custom_checkpoint(transformer, mode='temp'), 
+        sample, num_frames
+    )['sample']
+
+    return sample
+
 def cross_attn_g_c(
         attn, 
         temp_attn, 

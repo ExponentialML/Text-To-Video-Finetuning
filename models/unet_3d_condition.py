@@ -32,6 +32,7 @@ from .unet_3d_blocks import (
     UpBlock3D,
     get_down_block,
     get_up_block,
+    transformer_g_c
 )
 
 
@@ -315,6 +316,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
             fn_recursive_set_attention_slice(module, reversed_slice_size)
 
     def _set_gradient_checkpointing(self, value=False):
+        self.gradient_checkpointing = value
         self.mid_block.gradient_checkpointing = value
         for module in self.down_blocks + self.up_blocks:
             if isinstance(module, (CrossAttnDownBlock3D, DownBlock3D, CrossAttnUpBlock3D, UpBlock3D)):
@@ -401,8 +403,11 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         # 2. pre-process
         sample = sample.permute(0, 2, 1, 3, 4).reshape((sample.shape[0] * num_frames, -1) + sample.shape[3:])
         sample = self.conv_in(sample)
-
-        sample = self.transformer_in(sample, num_frames=num_frames).sample
+        
+        if self.gradient_checkpointing:
+            sample = transformer_g_c(self.transformer_in, sample, num_frames)
+        else:
+            sample = self.transformer_in(sample, num_frames=num_frames).sample
 
         # 3. down
         down_block_res_samples = (sample,)
