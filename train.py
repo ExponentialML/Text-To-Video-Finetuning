@@ -480,7 +480,7 @@ def main(
                 single_target_latent = noise[:, :,frame_idx, :, :].unsqueeze(2).clone()
                 
             # The text encoder doesn't have a temporal dimension, so we only train one frame.
-            if latents.shape[2] == 1: 
+            if video_length == 1: 
                 text_encoder.train()
                 text_encoder.requires_grad_(True)
             else:
@@ -500,8 +500,6 @@ def main(
         else:
             raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
 
-        # Predict the noise residual and compute loss
-
         # Group the latents as tuples and process them.
         noise_latent_groups = [(noisy_latents, target), (single_noisy_latents, single_target_latent)]
         losses = []
@@ -509,6 +507,16 @@ def main(
         # Predict the noise on all latents, then add the losses if there are more than 1.
         for i, latent in enumerate(noise_latent_groups):
             if all(l is not None for l in latent):
+
+                # If we're training the text encoder, don't compute hidden states for multiple frames.
+                is_video = latent[0].shape[2] > 1
+                trainable_enc = encoder_hidden_states.requires_grad
+                should_detach = is_video and train_encoder and trainable_enc
+                
+                if should_detach: 
+                    encoder_hidden_states = encoder_hidden_states.detach()
+                
+                # Predict the noise residual and compute loss
                 model_pred = unet(latent[0], timesteps, encoder_hidden_states=encoder_hidden_states).sample
                 loss = F.mse_loss(model_pred.float(), latent[1].float(), reduction="mean")
                 losses.append(loss)
