@@ -40,6 +40,7 @@ def get_text_prompt(
     ):
     try:
         if use_caption:
+            if len(text_prompt) > 1: return text_prompt
             caption_file = ''
             # Use caption on per-video basis (One caption PER video)
             for ext in ext_types:
@@ -52,22 +53,14 @@ def get_text_prompt(
             if os.path.exists(caption_file):
                 return read_caption_file(caption_file)
             
-            # Return text prompt if no conditions are met.
-            if len(text_prompt) > 1:
-                return text_prompt
-            else:
-                return fallback_prompt
+            # Return fallback prompt if no conditions are met.
+            return fallback_prompt
 
         return text_prompt
     except:
         print(f"Couldn't read prompt caption for {file_path}. Using fallback.")
         return fallback_prompt
 
-def path_or_prompt(caption_path, prompt):
-    if os.path.exists(self.single_caption_path):
-        prompt = read_caption_file(caption_path)
-    else:
-        return prompt
     
 def get_video_frames(vr, start_idx, sample_rate=1, max_frames=24):
     max_range = len(vr)
@@ -278,7 +271,6 @@ class SingleVideoDataset(Dataset):
             single_video_path: str = "",
             single_video_prompt: str = "",
             use_caption: bool = False,
-            single_caption_path: str = "",
             use_bucketing: bool = False,
             **kwargs
     ):
@@ -293,7 +285,6 @@ class SingleVideoDataset(Dataset):
 
         self.single_video_path = single_video_path
         self.single_video_prompt = single_video_prompt
-        self.single_caption_path = single_caption_path
 
         self.width = width
         self.height = height
@@ -352,7 +343,7 @@ class SingleVideoDataset(Dataset):
         if train_data.endswith(self.vid_types):
             video, _ = self.process_video_wrapper(train_data)
 
-            prompt = path_or_prompt(self.single_caption_path, self.single_video_prompt)
+            prompt = self.single_video_prompt
             prompt_ids = get_prompt_ids(prompt, self.tokenizer)
 
             return video, prompt, prompt_ids
@@ -414,7 +405,7 @@ class ImageDataset(Dataset):
         base_height: int = 256,
         use_caption: bool = False,
         image_dir: str = '',
-        single_caption_path: str = '',
+        single_img_prompt: str = '',
         use_bucketing: bool = False,
         fallback_prompt: str = '',
         **kwargs
@@ -427,7 +418,7 @@ class ImageDataset(Dataset):
         self.fallback_prompt = fallback_prompt
 
         self.use_caption = use_caption
-        self.single_caption_path = single_caption_path
+        self.single_img_prompt = single_img_prompt
 
         self.width = width
         self.height = height
@@ -463,6 +454,7 @@ class ImageDataset(Dataset):
 
         prompt = get_text_prompt(
             file_path=train_data,
+            text_prompt=self.single_img_prompt,
             fallback_prompt=self.fallback_prompt,
             ext_types=self.img_types,  
             use_caption=True

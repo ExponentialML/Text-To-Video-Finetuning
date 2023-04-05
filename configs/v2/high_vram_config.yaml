@@ -53,8 +53,8 @@ train_data:
   # 'single_video'
   single_video_path: "path/to/single/video.mp4"
 
-  # Only enabled for `single_video` and 'image'. Reads one caption file '.txt' and applies it to all videos/images.
-  single_caption_path: ""
+  # The prompt when using a a single video file
+  single_video_prompt: ""
 
   # Fallback prompt if caption cannot be read. Enabled for 'image' and 'folder'.
   fallback_prompt: ''
@@ -67,6 +67,9 @@ train_data:
 
   # 'image'
   image_dir: 'path/to/image/directory'
+
+  # The prompt for all image files. Leave blank to use caption files (.txt) 
+  single_img_prompt: ""
 
 # Validation data parameters.
 validation_data:
