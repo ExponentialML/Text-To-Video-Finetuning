@@ -127,7 +127,7 @@ trainable_modules:
 
 # Which modules we want to unfreeze for the Text Encoder. Advanced usage.
 trainable_text_modules:
-  #- "all"
+  - "all"
 
 # Seed for validation.
 seed: 64
