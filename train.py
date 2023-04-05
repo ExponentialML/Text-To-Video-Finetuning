@@ -211,7 +211,7 @@ def handle_trainable_modules(model, trainable_modules=None, is_enabled=True):
         for name, module in model.named_modules():
             for tm in tuple(trainable_modules):
                 if tm == 'all':
-                    model.requires_grad_(True)
+                    model.requires_grad_(is_enabled)
                     unfrozen_params =len(list(model.parameters()))
                     break
                 if tm in name:
@@ -486,7 +486,7 @@ def main(
             if video_length == 1: 
                 if global_step == 0: 
                     already_printed_trainables = False
-                    
+
                 text_encoder.train()
                 handle_trainable_modules(text_encoder, trainable_text_modules, is_enabled=True)
             else:
