@@ -552,12 +552,16 @@ def main(
                 # Backpropagate
                 try:
                     accelerator.backward(loss)
-                    if accelerator.sync_gradients:
-                        accelerator.clip_grad_norm_(filter(lambda p: p.requires_grad, unet.parameters()), max_grad_norm)
+                    params_to_clip = (
+                        unet.parameters() if not train_text_encoder 
+                    else 
+                        list(unet.parameters()) + list(text_encoder.parameters())
+                    )
+                    accelerator.clip_grad_norm_(params_to_clip, max_grad_norm)
                 
                     optimizer.step()
                     lr_scheduler.step()
-                    optimizer.zero_grad()
+                    optimizer.zero_grad(set_to_none=True)
                     
                 except Exception as e:
                     print(f"An error has occured during backpropogation! {e}") 
