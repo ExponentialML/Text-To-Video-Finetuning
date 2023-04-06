@@ -162,16 +162,31 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_t
 def param_optim(model, condition):
     return {"model": model, "condition": condition}
 
+def param_optim(model, condition, extra_params=None):
+    return {
+        "model": model, 
+        "condition": condition, 
+        'extra_params': extra_params
+    }
+
 def create_optimizer_params(model_list, lr):
     optimizer_params = []
 
     for optim in model_list:
         # If this is true, we can train it.
         if optim['condition']:
-            optimizer_params.append({
-                "params": optim['model'].parameters(), "lr": lr
-            })
-    
+            for n, p in optim['model'].named_parameters():
+
+                params = {
+                    "name": n, "params": p, "lr": lr
+                }
+
+                if optim['extra_params'] is not None:
+                    for k, v in optim['extra_params'].items():
+                        params[k] = v 
+
+                optimizer_params.append(params)
+
     return optimizer_params
 
 def get_optimizer(use_8bit_adam):
@@ -262,6 +277,8 @@ def main(
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = ("attn1", "attn2"),
     trainable_text_modules: Tuple[str] = ("all"),
+    extra_unet_params = None,
+    extra_text_encoder_params = None,
     train_batch_size: int = 1,
     max_train_steps: int = 500,
     learning_rate: float = 5e-5,
@@ -333,8 +350,8 @@ def main(
 
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
     optim_params = [
-        param_optim(unet, trainable_modules is not None),
-        param_optim(text_encoder, train_text_encoder == True),
+        param_optim(unet, trainable_modules is not None, extra_params=extra_unet_params),
+        param_optim(text_encoder, train_text_encoder == True, extra_params=extra_text_encoder_params),
     ]
     params = create_optimizer_params(optim_params, learning_rate)
     

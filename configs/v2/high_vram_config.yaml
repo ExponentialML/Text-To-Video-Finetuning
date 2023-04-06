@@ -99,6 +99,16 @@ learning_rate: 1e-5
 # Weight decay. Higher = more regularization. Lower = closer to dataset.
 adam_weight_decay: 0
 
+# Optimizer parameters for the UNET. Overrides base learning rate parameters.
+extra_unet_params: null
+  #learning_rate: 1e-5
+  #adam_weight_decay: 1e-4
+
+# Optimizer parameters for the Text Encoder. Overrides base learning rate parameters.
+extra_text_encoder_params: null
+  #learning_rate: 5e-6
+  #adam_weight_decay: 0.2
+
 # How many batches to train. Not to be confused with video frames.
 train_batch_size: 1
 
