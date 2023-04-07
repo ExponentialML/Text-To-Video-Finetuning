@@ -19,6 +19,104 @@ from diffusers.models.resnet import Downsample2D, ResnetBlock2D, TemporalConvLay
 from diffusers.models.transformer_2d import Transformer2DModel
 from diffusers.models.transformer_temporal import TransformerTemporalModel
 
+class DoDBlock(nn.Module):
+    """
+    A downconvolution layer with masked video latents
+    Gets the masked video latents (the first and the last frame) and makes a masked convolution
+    :param channels: channels in the inputs and outputs.
+    :param use_conv: a bool determining if a convolution is applied.
+    :param dims: Always 3D, downsampling occurs in the inner-two dimensions.
+    """
+
+    def __init__(self,
+                 channels,
+                 dims=3,
+                 depth=0,
+                 out_channels=None,
+                 padding=1,
+                 is_up=False,):
+        super().__init__()
+        self.channels = channels
+        self.out_channels = min((out_channels or channels) * (2 ** depth), 1280) if not is_up else (out_channels or channels)
+        self.dims = dims
+        self.is_up = is_up
+        stride = 2**depth if dims != 3 else (1, 2**depth, 2**depth) # if depth is zero, the stride is 1
+
+        # Convolution block, which should be initialized with zero weights and biases
+        # (zero conv)
+        self.conv_w = nn.Conv2d(
+            self.channels,
+            self.out_channels,
+            3,
+            stride=stride,
+            padding=padding)
+        
+        self.conv_b = nn.Conv2d(
+            self.channels,
+            self.out_channels,
+            3,
+            stride=stride,
+            padding=padding)
+        
+        # Conv for masking
+        self.mask_conv_w = nn.Conv2d(
+            1, # only black and white
+            self.out_channels,
+            3,
+            stride=stride,
+            padding=padding)
+        
+        self.mask_conv_b = nn.Conv2d(
+            1, # only black and white
+            self.out_channels,
+            3,
+            stride=stride,
+            padding=padding)
+
+    # h - hidden states, x_c - frame conditioning, x_m - masked video latents
+    def forward(self, h, x_c=None, x_m=None):
+
+        # When no frame conditioning is provided (top DoD iteration)
+        # return the untouched hidden states
+        if x_c is None or x_m is None:
+            return h
+
+        # Add image conditioning as linear operation
+        
+        #print('IS UP ', self.is_up)
+        #print('h', h.shape)
+        #print('xc', x_c.shape)
+        #print('xm', x_m.shape)
+        
+        #print('cw', self.conv_w.weight.shape)
+
+        # get weights and biases from frame conditioning
+        # vid convolution (initialized with zero weights and biases at first)
+        x_c_w = self.conv_w(x_c)
+        x_c_b = self.conv_b(x_c)
+        
+        #print('xcw', x_c_w.shape)
+        #print('xcb', x_c_b.shape)
+        
+        h = x_c_w * h + x_c_b + h # uses hadamard product
+
+        # Use masked video latents to mask the convolution
+        x_m_w = self.mask_conv_w(x_m)
+        x_m_b = self.mask_conv_b(x_m)
+
+        h = x_m_w * h + x_m_b + h # uses hadamard product
+        
+        return h
+    
+    def _init_weights(self):
+        # Zero initialization
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.constant_(m.weight, 0)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+
+
 # Assign gradient checkpoint function to simple variable for readability.
 g_c = checkpoint.checkpoint
 
@@ -119,6 +217,7 @@ def get_down_block(
     only_cross_attention=False,
     upcast_attention=False,
     resnet_time_scale_shift="default",
+    infinet=None,
 ):
     if down_block_type == "DownBlock3D":
         return DownBlock3D(
@@ -132,6 +231,7 @@ def get_down_block(
             resnet_groups=resnet_groups,
             downsample_padding=downsample_padding,
             resnet_time_scale_shift=resnet_time_scale_shift,
+            infinet=infinet,
         )
     elif down_block_type == "CrossAttnDownBlock3D":
         if cross_attention_dim is None:
@@ -153,6 +253,7 @@ def get_down_block(
             only_cross_attention=only_cross_attention,
             upcast_attention=upcast_attention,
             resnet_time_scale_shift=resnet_time_scale_shift,
+            infinet=infinet,
         )
     raise ValueError(f"{down_block_type} does not exist.")
 
@@ -175,6 +276,7 @@ def get_up_block(
     only_cross_attention=False,
     upcast_attention=False,
     resnet_time_scale_shift="default",
+    infinet=None,
 ):
     if up_block_type == "UpBlock3D":
         return UpBlock3D(
@@ -188,6 +290,7 @@ def get_up_block(
             resnet_act_fn=resnet_act_fn,
             resnet_groups=resnet_groups,
             resnet_time_scale_shift=resnet_time_scale_shift,
+            infinet=infinet,
         )
     elif up_block_type == "CrossAttnUpBlock3D":
         if cross_attention_dim is None:
@@ -209,6 +312,7 @@ def get_up_block(
             only_cross_attention=only_cross_attention,
             upcast_attention=upcast_attention,
             resnet_time_scale_shift=resnet_time_scale_shift,
+            infinet=infinet,
         )
     raise ValueError(f"{up_block_type} does not exist.")
 
@@ -373,6 +477,7 @@ class CrossAttnDownBlock3D(nn.Module):
         use_linear_projection=False,
         only_cross_attention=False,
         upcast_attention=False,
+        infinet=None,
     ):
         super().__init__()
         resnets = []
@@ -406,6 +511,17 @@ class CrossAttnDownBlock3D(nn.Module):
                     out_channels,
                 )
             )
+
+            if infinet is not None:
+                infinet.input_blocks_injections.append(DoDBlock(
+                        infinet.in_channels,
+                        2,
+                        len(infinet.input_blocks_injections),
+                        out_channels,
+                        is_up=False,
+                    )
+                )
+
             attentions.append(
                 Transformer2DModel(
                     out_channels // attn_num_head_channels,
@@ -453,6 +569,9 @@ class CrossAttnDownBlock3D(nn.Module):
         attention_mask=None,
         num_frames=1,
         cross_attention_kwargs=None,
+        dod_block=None,
+        x_c=None,
+        x_m=None,
     ):
         # TODO(Patrick, William) - attention mask is not used
         output_states = ()
@@ -462,6 +581,8 @@ class CrossAttnDownBlock3D(nn.Module):
         ):
         
             if self.gradient_checkpointing:
+                # TODO: Infinet is not implemented here yet!
+                # so don't use it for now with gradient checkpointing on
                 hidden_states = cross_attn_g_c(
                         attn, 
                         temp_attn, 
@@ -477,6 +598,10 @@ class CrossAttnDownBlock3D(nn.Module):
             else:
                 hidden_states = resnet(hidden_states, temb)
                 hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if dod_block is not None:
+                    hidden_states = dod_block(hidden_states, x_c, x_m)
+
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -511,6 +636,7 @@ class DownBlock3D(nn.Module):
         output_scale_factor=1.0,
         add_downsample=True,
         downsample_padding=1,
+        infinet=None,
     ):
         super().__init__()
         resnets = []
@@ -540,6 +666,16 @@ class DownBlock3D(nn.Module):
                 )
             )
 
+            if infinet is not None:
+                infinet.input_blocks_injections.append(DoDBlock(
+                        infinet.in_channels,
+                        2, # dims
+                        len(infinet.input_blocks_injections),
+                        out_channels,
+                        is_up=False,
+                    )
+                )
+
         self.resnets = nn.ModuleList(resnets)
         self.temp_convs = nn.ModuleList(temp_convs)
 
@@ -554,7 +690,7 @@ class DownBlock3D(nn.Module):
         else:
             self.downsamplers = None
 
-    def forward(self, hidden_states, temb=None, num_frames=1):
+    def forward(self, hidden_states, temb=None, num_frames=1, dod_block=None, x_c=None, x_m=None,):
         output_states = ()
 
         for resnet, temp_conv in zip(self.resnets, self.temp_convs):
@@ -563,6 +699,9 @@ class DownBlock3D(nn.Module):
             else:
                 hidden_states = resnet(hidden_states, temb)
                 hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+            
+            if dod_block is not None:
+                hidden_states = dod_block(hidden_states, x_c, x_m)
 
             output_states += (hidden_states,)
 
@@ -597,6 +736,7 @@ class CrossAttnUpBlock3D(nn.Module):
         use_linear_projection=False,
         only_cross_attention=False,
         upcast_attention=False,
+        infinet=None,
     ):
         super().__init__()
         resnets = []
@@ -632,6 +772,19 @@ class CrossAttnUpBlock3D(nn.Module):
                     out_channels,
                 )
             )
+
+            if infinet is not None:
+                #print(len(infinet.input_blocks_injections))
+                #print(len(infinet.output_blocks_injections))
+                infinet.output_blocks_injections.append(DoDBlock(
+                        infinet.in_channels,
+                        2,
+                        max(0, 3 - len(infinet.output_blocks_injections)),#max(0, len(infinet.input_blocks_injections) - len(infinet.output_blocks_injections)),
+                        (out_channels // 2**(len(infinet.output_blocks_injections)-1)) if len(infinet.output_blocks_injections) > 1 else out_channels,
+                        is_up=True,
+                    )
+                )
+
             attentions.append(
                 Transformer2DModel(
                     out_channels // attn_num_head_channels,
@@ -675,6 +828,9 @@ class CrossAttnUpBlock3D(nn.Module):
         attention_mask=None,
         num_frames=1,
         cross_attention_kwargs=None,
+        dod_block=None,
+        x_c=None,
+        x_m=None,
     ):
         # TODO(Patrick, William) - attention mask is not used
         for resnet, temp_conv, attn, temp_attn in zip(
@@ -686,6 +842,8 @@ class CrossAttnUpBlock3D(nn.Module):
             hidden_states = torch.cat([hidden_states, res_hidden_states], dim=1)
 
             if self.gradient_checkpointing:
+                # TODO: Infinet is not implemented here yet!
+                # so don't use it with gradient checkpointing
                 hidden_states = cross_attn_g_c(
                         attn, 
                         temp_attn, 
@@ -701,6 +859,10 @@ class CrossAttnUpBlock3D(nn.Module):
             else:
                 hidden_states = resnet(hidden_states, temb)
                 hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if dod_block is not None:
+                    hidden_states = dod_block(hidden_states, x_c, x_m)
+
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -731,10 +893,12 @@ class UpBlock3D(nn.Module):
         resnet_pre_norm: bool = True,
         output_scale_factor=1.0,
         add_upsample=True,
+        infinet=None,
     ):
         super().__init__()
         resnets = []
         temp_convs = []
+        self.gradient_checkpointing=False
 
         for i in range(num_layers):
             res_skip_channels = in_channels if (i == num_layers - 1) else out_channels
@@ -761,6 +925,18 @@ class UpBlock3D(nn.Module):
                 )
             )
 
+            if infinet is not None:
+                #print(len(infinet.input_blocks_injections))
+                #print(len(infinet.output_blocks_injections))
+                infinet.output_blocks_injections.append(DoDBlock(
+                        infinet.in_channels,
+                        2,
+                        max(0, 3 - len(infinet.output_blocks_injections)),#max(0, len(infinet.input_blocks_injections) - len(infinet.output_blocks_injections)),
+                        (out_channels // 2**(len(infinet.output_blocks_injections)-1)) if len(infinet.output_blocks_injections) > 1 else out_channels,
+                        is_up=True,
+                    )
+                )
+
         self.resnets = nn.ModuleList(resnets)
         self.temp_convs = nn.ModuleList(temp_convs)
 
@@ -769,7 +945,7 @@ class UpBlock3D(nn.Module):
         else:
             self.upsamplers = None
 
-    def forward(self, hidden_states, res_hidden_states_tuple, temb=None, upsample_size=None, num_frames=1):
+    def forward(self, hidden_states, res_hidden_states_tuple, temb=None, upsample_size=None, num_frames=1, dod_block=None, x_c=None, x_m=None,):
         for resnet, temp_conv in zip(self.resnets, self.temp_convs):
             # pop res hidden states
             res_hidden_states = res_hidden_states_tuple[-1]
@@ -781,6 +957,9 @@ class UpBlock3D(nn.Module):
             else:
                 hidden_states = resnet(hidden_states, temb)
                 hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+            
+            if dod_block is not None:
+                hidden_states = dod_block(hidden_states, x_c, x_m)
 
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:

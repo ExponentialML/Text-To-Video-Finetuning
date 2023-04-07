@@ -32,11 +32,34 @@ from .unet_3d_blocks import (
     UpBlock3D,
     get_down_block,
     get_up_block,
+    DoDBlock,
 )
 
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
+# Class to keep DiffusionOverDiffusion modules as a separate model
+# with weights saveable as a detachable checkpoint
+class InfiNet(nn.Module):
+    def __init__(self, in_channels):
+        super(InfiNet, self).__init__()
+
+        self.in_channels = in_channels
+
+        self.diffusion_depth = 0 # Placeholder, because it's not passable into the pipeline
+
+        self.input_blocks_injections = nn.ModuleList()
+        self.output_blocks_injections = nn.ModuleList()
+    
+    def _init_weights(self):
+        # Zero initialization
+        for m in self.modules():
+            if isinstance(m, DoDBlock):
+                m._init_weights()
+            if isinstance(m, nn.ModuleList):
+                for l in m:
+                    if isinstance(l, DoDBlock):
+                        l._init_weights()
 
 @dataclass
 class UNet3DConditionOutput(BaseOutput):
@@ -103,10 +126,13 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         norm_eps: float = 1e-5,
         cross_attention_dim: int = 1024,
         attention_head_dim: Union[int, Tuple[int]] = 64,
+        use_infinet=True,
     ):
         super().__init__()
 
         self.sample_size = sample_size
+
+        self.use_infinet = use_infinet
 
         # Check inputs
         if len(down_block_types) != len(up_block_types):
@@ -154,6 +180,10 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         self.down_blocks = nn.ModuleList([])
         self.up_blocks = nn.ModuleList([])
 
+        if self.use_infinet:
+            # InfiNet insertion
+            self.infinet = InfiNet(in_channels)
+
         if isinstance(attention_head_dim, int):
             attention_head_dim = (attention_head_dim,) * len(down_block_types)
 
@@ -178,6 +208,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                 attn_num_head_channels=attention_head_dim[i],
                 downsample_padding=downsample_padding,
                 dual_cross_attention=False,
+                infinet=self.infinet if self.use_infinet else None,
             )
             self.down_blocks.append(down_block)
 
@@ -230,6 +261,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                 cross_attention_dim=cross_attention_dim,
                 attn_num_head_channels=reversed_attention_head_dim[i],
                 dual_cross_attention=False,
+                infinet=self.infinet if self.use_infinet else None,
             )
             self.up_blocks.append(up_block)
             prev_output_channel = output_channel
@@ -248,6 +280,10 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         self.conv_out = nn.Conv2d(
             block_out_channels[0], out_channels, kernel_size=conv_out_kernel, padding=conv_out_padding
         )
+        
+        if use_infinet:
+
+            self.infinet._init_weights()
 
     def set_attention_slice(self, slice_size):
         r"""
@@ -331,6 +367,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         down_block_additional_residuals: Optional[Tuple[torch.Tensor]] = None,
         mid_block_additional_residual: Optional[torch.Tensor] = None,
         return_dict: bool = True,
+        #diffusion_depth: int = 1, #until diffusion_depth is in Diffusers, we'll have to set it up in class properties instead
     ) -> Union[UNet3DConditionOutput, Tuple]:
         r"""
         Args:
@@ -397,15 +434,31 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         emb = emb.repeat_interleave(repeats=num_frames, dim=0)
         encoder_hidden_states = encoder_hidden_states.repeat_interleave(repeats=num_frames, dim=0)
 
+        # If aiming for DiffusionOverDiffusion and have InfiNet enabled, keep the original video
+        # + its mask of the first and last frames
+
+        if self.use_infinet and self.infinet.diffusion_depth > 0:
+            x_c = sample.clone().detach()
+            x_m = torch.zeros(x_c.shape[:1] + (1,) + x_c.shape[2:], dtype=x_c.dtype, device=x_c.device)
+            x_m[:, :, 0, :, :] = torch.ones_like(x_m[:, :, 0, :, :])
+            x_m[:, :, -1, :, :] = torch.ones_like(x_m[:, :, -1, :, :])
+            x_c = x_c.permute(0, 2, 1, 3, 4).reshape((x_c.shape[0] * num_frames, -1) + x_c.shape[3:])
+            x_m = x_m.permute(0, 2, 1, 3, 4).reshape((x_m.shape[0] * num_frames, -1) + x_m.shape[3:])
+        else:
+            x_c = None
+            x_m = None
+
         # 2. pre-process
         sample = sample.permute(0, 2, 1, 3, 4).reshape((sample.shape[0] * num_frames, -1) + sample.shape[3:])
         sample = self.conv_in(sample)
+
+        # InfiNet TODO: do we have to add a module injection here as well?
 
         sample = self.transformer_in(sample, num_frames=num_frames).sample
 
         # 3. down
         down_block_res_samples = (sample,)
-        for downsample_block in self.down_blocks:
+        for i, downsample_block in enumerate(self.down_blocks):
             if hasattr(downsample_block, "has_cross_attention") and downsample_block.has_cross_attention:
                 sample, res_samples = downsample_block(
                     hidden_states=sample,
@@ -414,9 +467,12 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                     attention_mask=attention_mask,
                     num_frames=num_frames,
                     cross_attention_kwargs=cross_attention_kwargs,
+                    dod_block=self.infinet.input_blocks_injections[i] if self.infinet is not None else None,
+                    x_c=x_c,
+                    x_m=x_m,
                 )
             else:
-                sample, res_samples = downsample_block(hidden_states=sample, temb=emb, num_frames=num_frames)
+                sample, res_samples = downsample_block(hidden_states=sample, temb=emb, num_frames=num_frames, dod_block=self.infinet.input_blocks_injections[i] if self.infinet is not None else None, x_c=x_c, x_m=x_m,)
 
             down_block_res_samples += res_samples
 
@@ -467,6 +523,9 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                     attention_mask=attention_mask,
                     num_frames=num_frames,
                     cross_attention_kwargs=cross_attention_kwargs,
+                    dod_block=self.infinet.output_blocks_injections[i] if self.infinet is not None else None,
+                    x_c=x_c,
+                    x_m=x_m,
                 )
             else:
                 sample = upsample_block(
@@ -475,6 +534,9 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                     res_hidden_states_tuple=res_samples,
                     upsample_size=upsample_size,
                     num_frames=num_frames,
+                    dod_block=self.infinet.output_blocks_injections[i] if self.infinet is not None else None,
+                    x_c=x_c,
+                    x_m=x_m,
                 )
 
         # 6. post-process
