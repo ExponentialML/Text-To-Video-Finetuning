@@ -36,7 +36,8 @@ from diffusers.models.attention import BasicTransformerBlock
 
 from transformers import CLIPTextModel, CLIPTokenizer
 from transformers.models.clip.modeling_clip import CLIPEncoder
-from utils.dataset import VideoJsonDataset, SingleVideoDataset, ImageDataset, VideoFolderDataset
+from utils.dataset import VideoJsonDataset, SingleVideoDataset, \
+    ImageDataset, VideoFolderDataset, CachedDataset
 from einops import rearrange, repeat
 
 already_printed_trainables = False
@@ -217,6 +218,55 @@ def cast_to_gpu_and_type(model_list, accelerator, weight_dtype):
     for model in model_list:
         if model is not None: model.to(accelerator.device, dtype=weight_dtype)
 
+def handle_cache_latents(
+        should_cache, 
+        output_dir, 
+        train_dataloader, 
+        train_batch_size, 
+        vae, 
+        cached_latent_dir=None
+    ):
+
+    # Cache latents by storing them in VRAM. 
+    # Speeds up training and saves memory by not encoding during the train loop.
+    if not should_cache: return None
+    vae.to('cuda', dtype=torch.float16)
+    vae.enable_slicing()
+    
+    cached_latent_dir = (
+        os.path.abspath(cached_latent_dir) if cached_latent_dir is not None else None 
+        )
+
+    if cached_latent_dir is None:
+        cache_save_dir = f"{output_dir}/cached_latents"
+        os.makedirs(cache_save_dir, exist_ok=True)
+
+        for i, batch in enumerate(tqdm(train_dataloader, desc="Caching Latents.")):
+
+            save_name = f"cached_{i}"
+            full_out_path =  f"{cache_save_dir}/{save_name}.pt"
+
+            pixel_values = batch['pixel_values'].to('cuda', dtype=torch.float16)
+            batch['pixel_values'] = tensor_to_vae_latent(pixel_values, vae)
+            for k, v in batch.items(): batch[k] = v[0]
+        
+            torch.save(batch, full_out_path)
+            del pixel_values
+            del batch
+
+            # We do this to avoid fragmentation from casting latents between devices.
+            torch.cuda.empty_cache()
+    else:
+        cache_save_dir = cached_latent_dir
+        
+
+    return torch.utils.data.DataLoader(
+        CachedDataset(cache_dir=cache_save_dir), 
+        batch_size=train_batch_size, 
+        shuffle=True,
+        num_workers=0
+    ) 
+
 def handle_trainable_modules(model, trainable_modules=None, is_enabled=True):
     global already_printed_trainables
 
@@ -304,6 +354,8 @@ def main(
     use_offset_noise: bool = False,
     offset_noise_strength: float = 0.1,
     extend_dataset: bool = False,
+    cache_latents: bool = False,
+    cached_latent_dir = None,
     **kwargs
 ):
 
@@ -399,6 +451,19 @@ def main(
                 return_tensors="pt",
     ).input_ids.to(accelerator.device)
 
+     # Latents caching
+    cached_data_loader = handle_cache_latents(
+        cache_latents, 
+        output_dir,
+        train_dataloader, 
+        train_batch_size, 
+        vae,
+        cached_latent_dir
+    ) 
+
+    if cached_data_loader is not None: 
+        train_dataloader = cached_data_loader
+
     # Prepare everything with our `accelerator`.
     unet, optimizer,train_dataloader, lr_scheduler, text_encoder = accelerator.prepare(
         unet, 
@@ -466,10 +531,13 @@ def main(
         # Convert videos to latent space
         pixel_values = batch["pixel_values"].to(weight_dtype)
 
-        latents = tensor_to_vae_latent(pixel_values, vae)
+        if not cache_latents:
+            latents = tensor_to_vae_latent(pixel_values, vae)
+        else:
+            latents = pixel_values
 
         # Get video length
-        video_length = pixel_values.shape[1]
+        video_length = latents.shape[2]
 
         # Sample noise that we'll add to the latents
         noise = sample_noise(latents, offset_noise_strength, use_offset_noise)

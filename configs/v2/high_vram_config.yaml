@@ -27,6 +27,15 @@ use_offset_noise: False
 # For example, if you have 200 videos and 10 images, 10 images will be duplicated to the length of 200. 
 extend_dataset: False
 
+# Caches the latents (Frames-Image -> VAE -> Latent) to a HDD or SDD. 
+# The latents will be saved under your training folder, and loaded automatically for training.
+# This both saves memory and speeds up training and takes very little disk space.
+cache_latents: True
+
+# If you have cached latents set to `True` and have a directory of cached latents,
+# you can skip the caching process and load previously saved ones. 
+cached_latent_dir: null #/path/to/cached_latents
+
 # Training data parameters
 train_data:
 
