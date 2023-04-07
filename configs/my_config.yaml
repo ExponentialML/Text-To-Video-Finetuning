@@ -7,7 +7,7 @@ train_data:
   preprocessed: True
   n_sample_frames: 8
   width: 256      
-  height: 256
+  height: 128
   sample_start_idx: 0
   sample_frame_rate: 15
   use_random_start_idx: False
@@ -16,12 +16,14 @@ train_data:
   single_video_path: ""
   single_video_prompt: ""
 
+  infinet_source_path: "video"
+
 validation_data:
   prompt: ""
   sample_preview: True
   num_frames: 16
   width: 256
-  height: 256
+  height: 128
   num_inference_steps: 50
   guidance_scale: 9
 

@@ -1,4 +1,7 @@
 import os
+import re
+import secrets
+
 import decord
 import numpy as np
 import random
@@ -27,16 +30,19 @@ class VideoDataset(Dataset):
             single_video_path: str = "",
             single_video_prompt: str = "",
             train_infinet = False,
+            infinet_source_path: str = "",
             **kwargs
     ):
-
         self.tokenizer = tokenizer
         self.preprocessed = preprocessed
 
         self.single_video_path = single_video_path
         self.single_video_prompt = single_video_prompt
 
-        self.train_data = self.load_from_json(json_path)
+        if not train_infinet:
+            self.train_data = self.load_from_json(json_path)
+        else:
+            self.train_data = infinet_source_path
         self.vid_data_key = vid_data_key
         self.sample_iters = 0
         self.original_start_idx = sample_start_idx
@@ -51,7 +57,58 @@ class VideoDataset(Dataset):
         self.sample_frame_rate_init = sample_frame_rate
 
         self.train_infinet = train_infinet
+        self.depth_data = {}
 
+        if self.train_infinet:
+            self.init_infinet_video_data()
+
+    def init_infinet_video_data(self):
+        print("Initializing InfiNet Dataset")
+        self.depths, self.train_data = self.count_folders(self.train_data)
+        self.infindex = 0
+        self.prev_depth = 0
+
+    def count_folders(self, path, depth_counter=0, parts_counter=None):
+        if parts_counter is None:
+            parts_counter = {}
+
+        for entry in os.scandir(path):
+            if entry.is_dir():
+                if entry.name.startswith("depth"):
+                    depth_counter += 1
+                    current_depth = entry.name
+                    current_depth = int(re.search(r'\d+', current_depth).group())
+                    if current_depth not in parts_counter:
+                        parts_counter[current_depth] = {'depth':current_depth, 'part_count': 0, 'mp4_data': []}
+                    depth_counter, parts_counter = self.count_folders(entry.path, depth_counter, parts_counter)
+                elif entry.name.startswith("part"):
+                    parent_depth = os.path.basename(os.path.dirname(entry.path))
+                    if parent_depth.startswith("depth"):
+                        parent_depth = int(re.search(r'\d+', parent_depth).group())
+                        parts_counter[parent_depth]['part_count'] += 1
+                        mp4_data = self.get_mp4_and_txt_data(entry.path)
+                        parts_counter[parent_depth]['mp4_data'].extend(mp4_data)
+                else:
+                    depth_counter, parts_counter = self.count_folders(entry.path, depth_counter, parts_counter)
+
+        return depth_counter, parts_counter
+
+    def get_mp4_and_txt_data(self, path):
+        mp4_data = []
+        for entry in os.scandir(path):
+            if entry.is_file() and entry.name.lower().endswith(".mp4"):
+                mp4_path = entry.path
+                txt_path = os.path.splitext(mp4_path)[0] + ".txt"
+
+                if os.path.exists(txt_path):
+                    with open(txt_path, "r") as txt_file:
+                        txt_content = txt_file.read()
+                else:
+                    txt_content = None
+
+                mp4_data.append({'mp4_path': mp4_path, 'txt_content': txt_content})
+
+        return mp4_data
     def load_from_json(self, path):
         # Don't load a JSON file if we're doing single video training
         if os.path.exists(self.single_video_path): return
@@ -92,7 +149,25 @@ class VideoDataset(Dataset):
     
     def get_frame_range(self, idx, vr):
         return list(range(idx, len(vr), self.sample_frame_rate))[:self.n_sample_frames]
-    
+
+    def get_infinet_frame_range(self, current_depth, vr):
+        max_depths = self.depths
+        min_frames = 2
+        max_frames = self.n_sample_frames
+
+        # Calculate the number of frames to be sampled at the current depth
+        num_frames = min_frames + int((max_frames - min_frames) * (current_depth / (max_depths - 1)))
+
+        # Limit the number of frames to the total number of frames in the video
+        num_frames = min(num_frames, len(vr))
+
+        # Calculate the step size between frames
+        step = (len(vr) - 1) // (num_frames - 1)
+
+        # Generate the frame indices
+        frame_range = [idx for idx in range(0, len(vr), step)][:num_frames]
+
+        return frame_range
     def get_sample_idx(self, idx, vr):
         # Get the frame idx range based on the get_vid_idx function
         # We have a fallback here just in case we the frame cannot be read
@@ -136,15 +211,38 @@ class VideoDataset(Dataset):
         else:
             return 1
 
-    def __getitem__(self, index):
+    def __getitem__(self, index, depth=None):
         
         # Initialize variables
         video = None
         prompt = None
         prompt_ids = None
 
+        if self.train_infinet and depth != None:
+            parts = int(self.train_data[depth]["part_count"])
+            if depth != self.prev_depth or self.infindex > parts:
+                self.infindex = 0
+                self.prev_depth = depth
+            if self.use_random_start_idx:
+                self.infindex = secrets.randbelow(parts)
+
+            train_data = self.train_data[depth]["mp4_data"][self.infindex]["mp4_path"]
+            vr = decord.VideoReader(train_data, width=self.width, height=self.height)
+
+            sample_index = self.get_infinet_frame_range(depth, vr)
+
+            # Process video and rearrange
+            video = vr.get_batch(sample_index)
+            video = rearrange(video, "f h w c -> f c h w")
+
+            prompt = self.train_data[depth]["mp4_data"][self.infindex]["txt_content"]
+            prompt_ids = self.get_prompt_ids(prompt)
+
+            self.infindex += 1
+
+
         # Check if we're doing single video training
-        if os.path.exists(self.single_video_path):
+        elif not self.train_infinet and os.path.exists(self.single_video_path):
             train_data = self.single_video_path
 
             # Load and sample video frames
@@ -191,9 +289,6 @@ class VideoDataset(Dataset):
             # Get video prompt
             prompt = vid_data['prompt']
 
-            # Get diffusion depth for training Infinet
-            diffusion_depth = vid_data['diffusion_depth'] if 'diffusion_depth' in vid_data.keys() else 0
-
             video = vr.get_batch(sample_index)
             video = rearrange(video, "f h w c -> f c h w")
 
@@ -203,7 +298,7 @@ class VideoDataset(Dataset):
             "pixel_values": (video / 127.5 - 1.0),
             "prompt_ids": prompt_ids[0],
             "text_prompt": prompt,
-            "diffusion_depth": diffusion_depth,
+            "diffusion_depth": depth,
         }
 
         return example
