@@ -93,6 +93,9 @@ def extend_datasets(datasets, dataset_items, extend=False):
     biggest_data_len = max(x.__len__() for x in datasets)
     extended = []
     for dataset in datasets:
+        if dataset.__len__() == 0:
+            del dataset
+            continue
         if dataset.__len__() < biggest_data_len:
             for item in dataset_items:
                 if extend and item not in extended and hasattr(dataset, item):
@@ -406,6 +409,41 @@ def replace_prompt(prompt, token, wlist):
         if w in prompt: return prompt.replace(w, token)
     return prompt 
 
+def save_pipe(
+        path, 
+        global_step,
+        accelerator, 
+        unet, 
+        text_encoder, 
+        vae, 
+        output_dir,
+        use_unet_lora,
+        use_text_lora,
+        is_checkpoint=False
+    ):
+
+    if is_checkpoint:
+        save_path = os.path.join(output_dir, f"checkpoint-{global_step}")
+        os.makedirs(save_path, exist_ok=True)
+    else:
+        save_path = output_dir
+
+    # Save the dtypes so we can continue training at the same precision.
+    u_dtype, t_dtype, v_dtype = unet.dtype, text_encoder.dtype, vae.dtype 
+
+    # We do this to prevent OOM during training when saving a checkpoint.
+    [x.to('cpu') for x in [unet, text_encoder, vae]]
+
+    pipeline = TextToVideoSDPipeline.from_pretrained(
+        path,
+        unet=unet,
+        text_encoder=text_encoder,
+        vae=vae,
+    )
+
+    del pipeline
+    torch.cuda.empty_cache()
+
 def main(
     pretrained_model_path: str,
     output_dir: str,
@@ -541,7 +579,11 @@ def main(
         train_dataset = torch.utils.data.ConcatDataset(train_datasets) 
 
     # DataLoaders creation:
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size)
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset, 
+        batch_size=train_batch_size,
+        shuffle=True
+    )
 
      # Latents caching
     cached_data_loader = handle_cache_latents(
@@ -656,7 +698,6 @@ def main(
             text_encoder.train()
 
             if global_step == 0 and train_text_encoder:
-                handle_trainable_modules = False
                 handle_trainable_modules(
                     text_encoder, 
                     trainable_modules=trainable_text_modules,
@@ -754,24 +795,18 @@ def main(
                 train_loss = 0.0
             
                 if global_step % checkpointing_steps == 0:
-                    save_path = os.path.join(output_dir, f"checkpoint-{global_step}")
-                    os.makedirs(save_path, exist_ok=True)
-                    
-                    unet = accelerator.unwrap_model(unet)
-                    text_encoder = accelerator.unwrap_model(text_encoder)
-
-                    pipeline = TextToVideoSDPipeline.from_pretrained(
-                        pretrained_model_path,
-                        text_encoder=text_encoder,
-                        vae=vae,
-                        unet=unet,
+                    save_pipe(
+                        pretrained_model_path, 
+                        global_step, 
+                        accelerator, 
+                        unet, 
+                        text_encoder, 
+                        vae, 
+                        output_dir, 
+                        use_unet_lora, 
+                        use_text_lora,
+                        is_checkpoint=True
                     )
-                    
-                    pipeline.save_pretrained(save_path)
-                    handle_lora_save(use_unet_lora, use_text_lora, pipeline)
-
-                    logger.info(f"Saved model at {save_path} on step {global_step}")
-                    del pipeline
 
                 if should_sample(global_step, validation_steps, validation_data):
                     if global_step == 1: print("Performing validation prompt.")
@@ -811,7 +846,7 @@ def main(
                             export_to_video(video_frames, out_file, train_data.get('fps', 8))
 
                             del pipeline
-                            gc.collect()
+                            torch.cuda.empty_cache()
 
                     logger.info(f"Saved a new sample to {out_file}")
 
@@ -832,20 +867,18 @@ def main(
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-
-        unet = accelerator.unwrap_model(unet)
-        text_encoder = accelerator.unwrap_model(text_encoder)
-
-        pipeline = TextToVideoSDPipeline.from_pretrained(
-            pretrained_model_path,
-            text_encoder=text_encoder,
-            vae=vae,
-            unet=unet,
-        )
-
-        pipeline.save_pretrained(output_dir)
-        handle_lora_save(use_unet_lora, use_text_lora, pipeline)
-            
+        save_pipe(
+                pretrained_model_path, 
+                global_step, 
+                accelerator, 
+                unet, 
+                text_encoder, 
+                vae, 
+                output_dir, 
+                use_unet_lora, 
+                use_text_lora,
+                is_checkpoint=False
+        )      
     accelerator.end_training()
 
 if __name__ == "__main__":

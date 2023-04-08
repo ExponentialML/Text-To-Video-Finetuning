@@ -7,6 +7,7 @@ import torchvision
 import torchvision.transforms as T
 import torch
 
+from PIL import Image
 from itertools import islice
 from pathlib import Path
 from .bucketing import sensible_buckets
@@ -93,7 +94,7 @@ class VideoJsonDataset(Dataset):
             n_sample_frames: int = 4,
             sample_start_idx: int = 1,
             frame_step: int = 1,
-            json_path: str ="./data",
+            json_path: str ="",
             json_data = None,
             vid_data_key: str = "video_path",
             preprocessed: bool = False,
@@ -146,7 +147,8 @@ class VideoJsonDataset(Dataset):
                 return self.build_json(json_data)
 
         except:
-            raise ValueError("Invalid JSON")
+            self.train_data = []
+            print("Non-existant JSON path. Skipping.")
             
     def validate_json(self, base_path, path):
         return os.path.exists(f"{base_path}/{path}")
@@ -370,30 +372,6 @@ class SingleVideoDataset(Dataset):
 
         return example
     
-    @staticmethod
-    def __getname__(): return 'single_video'
-
-    def __len__(self):
-        if os.path.exists(self.single_video_path): return 1
-        return 0
-
-    def __getitem__(self, index):
-        # Initialize variables
-        video = None
-        prompt = None
-        prompt_ids = None
-
-        video, prompt, prompt_ids = self.single_video_batch()
-
-        example = {
-            "pixel_values": (video / 127.5 - 1.0),
-            "prompt_ids": prompt_ids[0],
-            "text_prompt": prompt,
-            'dataset': self.__getname__()
-        }
-
-        return example
-    
 class ImageDataset(Dataset):
     
     def __init__(
@@ -403,7 +381,7 @@ class ImageDataset(Dataset):
         height: int = 256,
         base_width: int = 256,
         base_height: int = 256,
-        use_caption: bool = False,
+        use_caption:     bool = False,
         image_dir: str = '',
         single_img_prompt: str = '',
         use_bucketing: bool = False,
@@ -439,7 +417,11 @@ class ImageDataset(Dataset):
         train_data = self.image_dir[index]
         img = train_data
 
-        img = torchvision.io.read_image(img, mode=torchvision.io.ImageReadMode.RGB)
+        try:
+            img = torchvision.io.read_image(img, mode=torchvision.io.ImageReadMode.RGB)
+        except:
+            img = T.transforms.ToTensor()(Image.open(img).convert("RGB"))
+
         width = self.width
         height = self.height
 
@@ -474,16 +456,7 @@ class ImageDataset(Dataset):
             return 0
 
     def __getitem__(self, index):
-        
-        # Initialize variables
-        video = None
-        prompt = None
-        prompt_ids = None
-
-        # Do image training
-        if os.path.exists(self.image_dir[0]):
-            img, prompt, prompt_ids = self.image_batch(index)
-
+        img, prompt, prompt_ids = self.image_batch(index)
         example = {
             "pixel_values": (img / 127.5 - 1.0),
             "prompt_ids": prompt_ids[0],
@@ -573,7 +546,7 @@ class VideoFolderDataset(Dataset):
 
     def __getitem__(self, index):
 
-        video, _ = process_video_wrapper(self.video_files[index])
+        video, _ = self.process_video_wrapper(self.video_files[index])
 
         if os.path.exists(self.video_files[index].replace(".mp4", ".txt")):
             with open(self.video_files[index].replace(".mp4", ".txt"), "r") as f:
