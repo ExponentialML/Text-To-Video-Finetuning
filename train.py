@@ -714,7 +714,7 @@ def main(
 
             if use_text_lora and text_encoder_gradient_checkpointing: 
                 text_encoder.text_model.embeddings.requires_grad_(True)
-                
+
             if global_step == 0 and train_text_encoder:
                 handle_trainable_modules(
                     text_encoder, 
@@ -784,7 +784,7 @@ def main(
                     progress_bar.update(1)
                 continue
             
-            with accelerator.accumulate(unet) ,accelerator.accumulate(text_encoder.text_model.encoder):
+            with accelerator.accumulate(unet) ,accelerator.accumulate(text_encoder):
 
                 text_prompt = batch['text_prompt'][0]
                 
