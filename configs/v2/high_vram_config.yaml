@@ -41,7 +41,6 @@ train_text_encoder: False
 # Use LoRA to train extra layers whilst saving memory. It trains both a LoRA & the model itself.
 # This works slightly different than vanilla LoRA and DOES NOT save a separate file.
 # It is simply used as a mechanism for saving memory by keeping layers frozen and training the residual.
-# The LoRA rank for each is hard coded at `16`. Go higher and we're back where we started :-).
 
 # Use LoRA for the UNET model.
 use_unet_lora: True
