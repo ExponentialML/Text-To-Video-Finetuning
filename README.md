@@ -104,6 +104,14 @@ After training, you should see your results in your output directory.
 
 By default, it should be placed at the script root under `./outputs/train_<date>`
 
+From my testing, I recommend:
+
+- Keep the number of sample frames between 4-16. Use long frame generation for inference, *not* training.
+- If you have a low VRAM system, you can try single frame training or just use `n_sample_frames: 2`.
+- Using a learning rate of about `5e-6` seems to work well in all cases.
+- The best quality will always come from training the text encoder. If you're limited on VRAM, disabling it can help.
+- Leave some memory to avoid OOM when saving models during training.
+
 ## Developing
 
 Please feel free to open a pull request if you have a feature implementation or suggesstion! I welcome all contributions.
