@@ -440,7 +440,16 @@ def save_pipe(
         text_encoder=text_encoder,
         vae=vae,
     )
+    
+    handle_lora_save(use_unet_lora, use_text_lora, pipeline, end_train=not is_checkpoint)
+    pipeline.save_pretrained(save_path)
+    
+    if is_checkpoint:
+        models_to_cast_back = [(unet, u_dtype), (text_encoder, t_dtype), (vae, v_dtype)]
+        [x[0].to(accelerator.device, dtype=x[1]) for x in models_to_cast_back]
 
+    logger.info(f"Saved model at {save_path} on step {global_step}")
+    
     del pipeline
     torch.cuda.empty_cache()
 
