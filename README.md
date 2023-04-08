@@ -37,15 +37,17 @@ pip install -r requirements.txt
 
 All code was tested on Python 3.10.9 & Torch version 1.13.1 & 2.0.
 
-You could potentially save memory by installing xformers and enabling it in your config. Please follow the instructions at the following repository for details on how to install.
+It is **highly recommended** to install >= Torch 2.0. This way, you don't have to install Xformers *or* worry about memory performance. 
 
-https://github.com/facebookresearch/xformers
+If you don't have Xformers enabled, you can follow the instructions here: https://github.com/facebookresearch/xformers
+
 
 Recommended to use a RTX 3090, but you should be able to train on GPUs with <= 16GB ram with:
-- Validation turned off 
+- Validation turned off.
 - Xformers or Torch 2.0 Scaled Dot-Product Attention 
-- gradient checkpointing enabled. 
+- Gradient checkpointing enabled. 
 - Resolution of 256.
+- Enable all LoRA options.
 
 ## Preprocessing your data
 
@@ -56,10 +58,11 @@ You can use caption files when training on images or video. Simply place them in
 **Images**: `/images/img.png /images/img.txt`
 **Videos**: `/videos/vid.mp4 | /videos/vid.txt`
 
+Then in your config, make sure to have `-folder` enabled, along with the root directory containing the files.
+
 ### Process Automatically
 
 You can automatically caption the videos using the [Video-BLIP2-Preprocessor Script](https://github.com/ExponentialML/Video-BLIP2-Preprocessor)
-
 
 ## Configuration
 
@@ -67,7 +70,13 @@ The configuration uses a YAML config borrowed from [Tune-A-Video](https://github
 
 All configuration details are placed in `configs/v2/high_vram_config.yaml`. Each parameter has a definition for what it does.
 
-**You'll have to modify the config with your own data.** It is recommended to copy the config, then call it when using the train script: `my_config.yaml`
+### How would you recommend I proceed with making a config with my data?
+
+I highly recommend (I did this myself) going to `configs/v2/high_vram_config.yaml`. Then make a copy of it and name it whatever you wish `my_train.yaml`.
+
+Then, follow each line and configure it for your specific use case. 
+
+The instructions should be clear enough to get you up and running with your dataset, but feel free to ask any questions in the discussion board.
 
 ### Finetuning on high VRAM systems.
 ```python
@@ -88,11 +97,12 @@ python train.py --config ./configs/v2/image_training.yaml
 ## Training Results
 
 With a lot of data, you can expect training results to show at roughly 2500 steps at a constant learning rate of 5e-6. 
-Play around with learning rates to see what works best for you (5e-6, 3e-5, 1e-4).
 
 When finetuning on a single video, you should see results in half as many steps.
 
-After training, you should see your results in your output directory. By default, it should be placed at the script root under `./outputs/train_<date>`
+After training, you should see your results in your output directory. 
+
+By default, it should be placed at the script root under `./outputs/train_<date>`
 
 ## Deprecation
 If you want to use the V1 repository, you can use the branch [here](https://github.com/ExponentialML/Text-To-Video-Finetuning/tree/version/first-release).
