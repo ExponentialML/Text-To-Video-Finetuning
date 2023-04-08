@@ -112,3 +112,9 @@ I've tried to make the code fairly modular so you can hack away, see how the cod
 
 ## Deprecation
 If you want to use the V1 repository, you can use the branch [here](https://github.com/ExponentialML/Text-To-Video-Finetuning/tree/version/first-release).
+
+## Shoutouts
+
+- [Showlab](https://github.com/showlab/Tune-A-Video) and bryandlee[https://github.com/bryandlee/Tune-A-Video] for their Tune-A-Video contribution that made this much easier.
+- [lucidrains](https://github.com/lucidrains) for their implementations around video diffusion.
+- [cloneofsimo](https://github.com/cloneofsimo) for their diffusers implementation of LoRA.
