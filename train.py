@@ -134,6 +134,10 @@ def load_primary_models(pretrained_model_path):
 
     return noise_scheduler, tokenizer, text_encoder, vae, unet
 
+def unet_and_text_g_c(unet, text_encoder, unet_enable, text_enable):
+    unet._set_gradient_checkpointing(value=unet_enable)
+    text_encoder._set_gradient_checkpointing(CLIPEncoder, value=text_enable)
+
 def freeze_models(models_to_freeze):
     for model in models_to_freeze:
         if model is not None: model.requires_grad_(False) 
@@ -153,6 +157,7 @@ def set_torch_2_attn(unet):
                 for m in module:
                     if isinstance(m, BasicTransformerBlock):
                         set_processors([m.attn1, m.attn2])
+                        optim_count += 1
     if optim_count > 0: 
         print(f"{optim_count} Attention layers using Scaled Dot Product Attention.")
 
@@ -251,7 +256,7 @@ def create_optimizer_params(model_list, lr):
     for optim in model_list:
         model, condition, extra_params, is_lora, negation = optim.values()
         # Check if we are doing LoRA training.
-        if is_lora: 
+        if is_lora and condition: 
             params = create_optim_params(
                 params=itertools.chain(*model), 
                 extra_params=extra_params
@@ -561,8 +566,12 @@ def main(
     )
 
     # Use Gradient Checkpointing if enabled.
-    unet._set_gradient_checkpointing(value=gradient_checkpointing)
-    text_encoder._set_gradient_checkpointing(CLIPEncoder, value=text_encoder_gradient_checkpointing)
+    unet_and_text_g_c(
+        unet, 
+        text_encoder, 
+        gradient_checkpointing, 
+        text_encoder_gradient_checkpointing
+    )
     
     # Enable VAE slicing to save memory.
     vae.enable_slicing()
@@ -745,10 +754,11 @@ def main(
                 train_loss = 0.0
             
                 if global_step % checkpointing_steps == 0:
-                    
                     save_path = os.path.join(output_dir, f"checkpoint-{global_step}")
                     os.makedirs(save_path, exist_ok=True)
+                    
                     unet = accelerator.unwrap_model(unet)
+                    text_encoder = accelerator.unwrap_model(text_encoder)
 
                     pipeline = TextToVideoSDPipeline.from_pretrained(
                         pretrained_model_path,
@@ -766,9 +776,11 @@ def main(
                 if should_sample(global_step, validation_steps, validation_data):
                     if global_step == 1: print("Performing validation prompt.")
                     if accelerator.is_main_process:
+
                         with accelerator.autocast():
                             unet.eval()
                             text_encoder.eval()
+                            unet_and_text_g_c(unet, text_encoder, False, False)
                             
                             pipeline = TextToVideoSDPipeline.from_pretrained(
                                 pretrained_model_path,
@@ -803,6 +815,13 @@ def main(
 
                     logger.info(f"Saved a new sample to {out_file}")
 
+                    unet_and_text_g_c(
+                        unet, 
+                        text_encoder, 
+                        gradient_checkpointing, 
+                        text_encoder_gradient_checkpointing
+                    )
+
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             accelerator.log({"training_loss": loss.detach().item()}, step=step)
             progress_bar.set_postfix(**logs)
@@ -815,6 +834,8 @@ def main(
     if accelerator.is_main_process:
 
         unet = accelerator.unwrap_model(unet)
+        text_encoder = accelerator.unwrap_model(text_encoder)
+
         pipeline = TextToVideoSDPipeline.from_pretrained(
             pretrained_model_path,
             text_encoder=text_encoder,

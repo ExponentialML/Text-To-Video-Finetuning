@@ -11,3 +11,4 @@ tqdm
 safetensors
 omegaconf
 opencv-python
+pydantic

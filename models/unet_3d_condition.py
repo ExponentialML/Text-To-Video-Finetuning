@@ -108,7 +108,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         super().__init__()
 
         self.sample_size = sample_size
-
+        self.gradient_checkpointing = False
         # Check inputs
         if len(down_block_types) != len(up_block_types):
             raise ValueError(

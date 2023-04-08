@@ -64,7 +64,7 @@ def custom_checkpoint(module, mode=None):
 
 def transformer_g_c(transformer, sample, num_frames):
     sample = g_c(custom_checkpoint(transformer, mode='temp'), 
-        sample, num_frames
+        sample, num_frames, use_reentrant=False
     )['sample']
 
     return sample
@@ -87,11 +87,11 @@ def cross_attn_g_c(
         # Self and CrossAttention
         if idx == 0: return g_c(custom_checkpoint(attn, mode='attn'),
             hidden_states, encoder_hidden_states,cross_attention_kwargs, use_reentrant=False
-        ).sample
+        )['sample']
 
         # Temporal Self and CrossAttention
         if idx == 1: return g_c(custom_checkpoint(temp_attn, mode='temp'), 
-            hidden_states, num_frames, use_reentrant=False).sample
+            hidden_states, num_frames, use_reentrant=False)['sample']
 
         # Resnets
         if idx == 2: return g_c(custom_checkpoint(resnet, mode='resnet'), 
@@ -113,9 +113,9 @@ def cross_attn_g_c(
     return hidden_states
 
 def up_down_g_c(resnet, temp_conv, hidden_states, temb, num_frames):
-    hidden_states = g_c(custom_checkpoint(resnet, mode='resnet'), hidden_states, temb)
+    hidden_states = g_c(custom_checkpoint(resnet, mode='resnet'), hidden_states, temb, use_reentrant=False)
     hidden_states = g_c(custom_checkpoint(temp_conv, mode='temp'), 
-        hidden_states, num_frames
+        hidden_states, num_frames,  use_reentrant=False
     )
     return hidden_states
 
@@ -345,8 +345,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
                     self.temp_convs[0], 
                     hidden_states, 
                     temb, 
-                    num_frames,
-                    use_reentrant=self.use_reentrant
+                    num_frames
                 )
         else:
             hidden_states = self.resnets[0](hidden_states, temb)
@@ -781,7 +780,7 @@ class UpBlock3D(nn.Module):
         super().__init__()
         resnets = []
         temp_convs = []
-
+        self.gradient_checkpointing = False
         for i in range(num_layers):
             res_skip_channels = in_channels if (i == num_layers - 1) else out_channels
             resnet_in_channels = prev_output_channel if i == 0 else out_channels
