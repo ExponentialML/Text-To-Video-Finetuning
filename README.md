@@ -78,7 +78,7 @@ Then, follow each line and configure it for your specific use case.
 
 The instructions should be clear enough to get you up and running with your dataset, but feel free to ask any questions in the discussion board.
 
-### Finetune.
+## Finetune.
 ```python
 python train.py --config ./configs/v2/train_config.yaml
 ```
