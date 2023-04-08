@@ -40,6 +40,18 @@ from utils.dataset import VideoJsonDataset, SingleVideoDataset, \
     ImageDataset, VideoFolderDataset, CachedDataset
 from einops import rearrange, repeat
 
+from lora_diffusion import (
+    extract_lora_ups_down,
+    inject_trainable_lora,
+    inject_trainable_lora_extended,
+    safetensors_available,
+    save_lora_weight,
+    save_safeloras,
+    collapse_lora,
+    monkeypatch_remove_lora
+)
+
+
 already_printed_trainables = False
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -160,32 +172,100 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_t
     except:
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
-def param_optim(model, condition):
-    return {"model": model, "condition": condition}
+def inject_lora(use_lora, model, replace_modules, is_extended=False):
+    injector = (
+        inject_trainable_lora if not is_extended 
+    else 
+        inject_trainable_lora_extended
+    )
 
-def param_optim(model, condition, extra_params=None):
+    params = None
+    negation = None
+
+    if use_lora:
+        REPLACE_MODULES = replace_modules
+
+        params, negation = injector(
+            model,
+            target_replace_module=REPLACE_MODULES
+        )   
+         
+        for _up, _down in extract_lora_ups_down(
+            model, 
+            target_replace_module=REPLACE_MODULES):
+
+            if all(x is not None for x in [_up, _down]):
+                print(f"Lora successfully injected into {model.__class__.__name__}.")
+
+            break
+        
+    return params, negation
+
+def handle_lora_save(use_unet_lora, use_text_lora, model):
+    if use_unet_lora:
+        collapse_lora(model.unet)
+        monkeypatch_remove_lora(model.unet)
+        
+    if use_text_lora:
+        collapse_lora(model.text_encoder)
+        monkeypatch_remove_lora(model.text_encoder)
+
+def param_optim(model, condition, extra_params=None, is_lora=False, negation=None):
     return {
         "model": model, 
         "condition": condition, 
-        'extra_params': extra_params
+        'extra_params': extra_params,
+        'is_lora': is_lora,
+        "negation": negation
+    }
+    
+
+def create_optim_params(name='param', params=None, lr=5e-6, extra_params=None):
+    params = {
+        "name": name, 
+        "params": params, 
+        "lr": lr, 
+        "extra_params": extra_params 
     }
 
+    if extra_params is not None:
+        for k, v in extra_params.items():
+            params[k] = v
+    
+    return params
+
+def negate_params(name, negation):
+    # We have to do this if we are co-training with LoRA.
+    # This ensures that parameter groups aren't duplicated.
+    if negation is None: return False
+    for n in negation:
+        if n in name and 'temp' not in name:
+            return True
+    return False
+
+
 def create_optimizer_params(model_list, lr):
+    import itertools
     optimizer_params = []
 
     for optim in model_list:
+        model, condition, extra_params, is_lora, negation = optim.values()
+        # Check if we are doing LoRA training.
+        if is_lora: 
+            params = create_optim_params(
+                params=itertools.chain(*model), 
+                extra_params=extra_params
+            )
+            optimizer_params.append(params)
+            continue
+
         # If this is true, we can train it.
-        if optim['condition']:
-            for n, p in optim['model'].named_parameters():
+        if condition:
+            for n, p in model.named_parameters():
+                should_negate = negate_params(n, negation)
+                if should_negate: continue
 
-                params = {
-                    "name": n, "params": p, "lr": lr
-                }
-
-                if optim['extra_params'] is not None:
-                    for k, v in optim['extra_params'].items():
-                        params[k] = v 
-
+                params = create_optim_params(n, p, lr, extra_params)
                 optimizer_params.append(params)
 
     return optimizer_params
@@ -267,7 +347,7 @@ def handle_cache_latents(
         num_workers=0
     ) 
 
-def handle_trainable_modules(model, trainable_modules=None, is_enabled=True):
+def handle_trainable_modules(model, trainable_modules=None, is_enabled=True, negation=None):
     global already_printed_trainables
 
     # This can most definitely be refactored :-)
@@ -279,7 +359,10 @@ def handle_trainable_modules(model, trainable_modules=None, is_enabled=True):
                     model.requires_grad_(is_enabled)
                     unfrozen_params =len(list(model.parameters()))
                     break
-                if tm in name:
+                should_negate = negate_params(name, negation)
+                if should_negate: continue
+
+                if tm in name and 'lora' not in name:
                     for m in module.parameters():
                         m.requires_grad_(is_enabled)
                         if is_enabled: unfrozen_params +=1
@@ -356,9 +439,12 @@ def main(
     extend_dataset: bool = False,
     cache_latents: bool = False,
     cached_latent_dir = None,
+    use_unet_lora: bool = False,
+    use_text_lora: bool = False,
+    unet_lora_modules: Tuple[str] = ["ResnetBlock2D"],
+    text_encoder_lora_modules: Tuple[str] = ["CLIPEncoderLayer"],
     **kwargs
 ):
-
 
     *_, config = inspect.getargvalues(inspect.currentframe())
 
@@ -400,11 +486,21 @@ def main(
     # Initialize the optimizer
     optimizer_cls = get_optimizer(use_8bit_adam)
 
+    # Use LoRA if enabled.    
+    unet_lora_params, unet_negation = inject_lora(
+        use_unet_lora, unet, unet_lora_modules)
+
+    text_encoder_lora_params, text_encoder_negation = inject_lora(
+        use_text_lora, text_encoder, text_encoder_lora_modules)
+
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
     optim_params = [
-        param_optim(unet, trainable_modules is not None, extra_params=extra_unet_params),
-        param_optim(text_encoder, train_text_encoder == True, extra_params=extra_text_encoder_params),
+        param_optim(unet, trainable_modules is not None, negation=unet_negation),
+        param_optim(text_encoder, train_text_encoder and not use_text_lora, negation=text_encoder_negation),
+        param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, extra_params={"lr": 5e-5}),
+        param_optim(unet_lora_params, use_unet_lora, is_lora=True, extra_params={"lr": 5e-6})
     ]
+
     params = create_optimizer_params(optim_params, learning_rate)
     
     # Create Optimizer
@@ -517,19 +613,23 @@ def main(
     progress_bar.set_description("Steps")
 
     def finetune_unet(batch, train_encoder=False):
-
-        # Set noise scheduler to cosine (this can be done via config, but this ensures it's enabled)
-        #noise_scheduler.beta_schedule = "squaredcos_cap_v2"
         
-        # Create list for noisy latents
-        all_latents = []
-
-        # Initialize variables for storing single frame latents (text encoder training)
-        single_noisy_latents = None
-        single_target_latent = None
+        # Check if we are training the text encoder
+        text_trainable = (train_text_encoder or use_text_lora)
         
+        # Unfreeze UNET Layers
+        if global_step == 0: 
+            already_printed_trainables = False
+            unet.train()
+            handle_trainable_modules(
+                unet, 
+                trainable_modules, 
+                is_enabled=True,
+                negation=unet_negation
+            )
+
         # Convert videos to latent space
-        pixel_values = batch["pixel_values"].to(weight_dtype)
+        pixel_values = batch["pixel_values"]
 
         if not cache_latents:
             latents = tensor_to_vae_latent(pixel_values, vae)
@@ -550,77 +650,60 @@ def main(
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-        
+    
         # Enable text encoder training
-        if train_encoder:
-            
-            if global_step == 0:
-                cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
+        if text_trainable:
+            text_encoder.train()
 
-            # This allows us to train over video frame data.
-            if video_length > 1:
-
-                # Get random frame index to help prevent overfitting
-                frame_idx = random.randint(1, video_length - 1)
-
-                # Single frame index of noisy latents
-                single_noisy_latents =  noisy_latents[:, :,frame_idx, :, :].unsqueeze(2).clone()
-                single_target_latent = noise[:, :,frame_idx, :, :].unsqueeze(2).clone()
+            if global_step == 0 and train_text_encoder:
+                handle_trainable_modules = False
+                handle_trainable_modules(
+                    text_encoder, 
+                    trainable_modules=trainable_text_modules,
+                    negation=text_encoder_negation
+            )
+            cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
                 
-            # The text encoder doesn't have a temporal dimension, so we only train one frame.
-            if video_length == 1: 
-                if global_step == 0: 
-                    already_printed_trainables = False
 
-                text_encoder.train()
-                handle_trainable_modules(text_encoder, trainable_text_modules, is_enabled=True)
-            else:
-                text_encoder.eval()
-                handle_trainable_modules(text_encoder, trainable_text_modules, is_enabled=False)
-
-        if global_step == 0:
-            if global_step == 0: 
-                already_printed_trainables = False
-
-            unet.train()
-            handle_trainable_modules(unet, trainable_modules, is_enabled=True)
-
-        # Get the text embedding for conditioning
-        encoder_hidden_states = text_encoder(batch['prompt_ids'])[0]
+        # Encode text embeddings
+        token_ids = batch['prompt_ids']
+        encoder_hidden_states = text_encoder(token_ids)[0]
 
         # Get the target for loss depending on the prediction type
         if noise_scheduler.prediction_type == "epsilon":
             target = noise
+
         elif noise_scheduler.prediction_type == "v_prediction":
             target = noise_scheduler.get_velocity(latents, noise, timesteps)
+
         else:
             raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
 
-        # Group the latents as tuples and process them.
-        noise_latent_groups = [(noisy_latents, target), (single_noisy_latents, single_target_latent)]
-        losses = []
         
-        # Predict the noise on all latents, then add the losses if there are more than 1.
-        for i, latent in enumerate(noise_latent_groups):
-            if all(l is not None for l in latent):
+        # Here we do two passes for video and text training.
+        # If we are on the second iteration of the loop, get one frame.
+        # This allows us to train text information only on the spatial layers.
+        losses = []
+        should_truncate_video = (video_length > 1 and text_trainable)
+        
+        for i in range(2):
+            
+            if should_truncate_video and i == 1:
+                noisy_latents = noisy_latents[:,:,1,:,:].unsqueeze(2)
+                target = target[:,:,1,:,:].unsqueeze(2)
 
-                # If we're training the text encoder, don't compute hidden states for multiple frames.
-                is_video = latent[0].shape[2] > 1
-                trainable_enc = encoder_hidden_states.requires_grad
-                should_detach = is_video and train_encoder and trainable_enc
+            if video_length > 1:
+                encoder_hidden_states = encoder_hidden_states.detach()
                 
-                if should_detach: 
-                    encoder_hidden_states = encoder_hidden_states.detach()
-                
-                # Predict the noise residual and compute loss
-                model_pred = unet(latent[0], timesteps, encoder_hidden_states=encoder_hidden_states).sample
-                loss = F.mse_loss(model_pred.float(), latent[1].float(), reduction="mean")
-                losses.append(loss)
-                
-                del model_pred
-                del loss
+            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states=encoder_hidden_states).sample
+            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-        loss = losses[0] if len(losses) == 1 else losses[0] + losses[1]
+            losses.append(loss)
+            
+            # This was most likely single frame training or a single image.
+            if video_length == 1 and i == 0: break
+
+        loss = losses[0] if len(losses) == 1 else losses[0] + losses[1] 
 
         return loss, latents
 
@@ -684,8 +767,9 @@ def main(
                     )
                     
                     pipeline.save_pretrained(save_path)
-                    logger.info(f"Saved model at {save_path} on step {global_step}")
+                    handle_lora_save(use_unet_lora, use_text_lora, pipeline)
 
+                    logger.info(f"Saved model at {save_path} on step {global_step}")
                     del pipeline
 
                 if should_sample(global_step, validation_steps, validation_data):
@@ -746,7 +830,9 @@ def main(
             vae=vae,
             unet=unet,
         )
+
         pipeline.save_pretrained(output_dir)
+        handle_lora_save(use_unet_lora, use_text_lora, pipeline)
             
     accelerator.end_training()
 

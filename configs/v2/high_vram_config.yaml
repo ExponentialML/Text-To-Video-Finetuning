@@ -36,6 +36,26 @@ cache_latents: True
 # you can skip the caching process and load previously saved ones. 
 cached_latent_dir: null #/path/to/cached_latents
 
+# https://github.com/cloneofsimo/lora
+# Use LoRA to train extra layers whilst saving memory. It trains both a LoRA & the model itself.
+# This works slightly different than vanilla LoRA and DOES NOT save a separate file.
+# It is simply used as a mechanism for saving memory by keeping layers frozen and training the residual.
+# The LoRA rank for each is hard coded at `16`. Go higher and we're back where we started :-).
+
+# Use LoRA for the UNET model.
+use_unet_lora: True
+
+# Use LoRA for the Text Encoder.
+use_text_lora: True
+
+# The modules to use for LoRA. Different from 'trainable_modules'.
+unet_lora_modules:
+  - "ResnetBlock2D"
+
+# The modules to use for LoRA. Different from `trainable_text_modules`.
+text_encoder_lora_modules:
+  - "CLIPEncoderLayer"
+
 # Training data parameters
 train_data:
 
