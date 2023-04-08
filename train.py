@@ -488,7 +488,7 @@ def main(
 
     # Use LoRA if enabled.    
     unet_lora_params, unet_negation = inject_lora(
-        use_unet_lora, unet, unet_lora_modules)
+        use_unet_lora, unet, unet_lora_modules, is_extended=True)
 
     text_encoder_lora_params, text_encoder_negation = inject_lora(
         use_text_lora, text_encoder, text_encoder_lora_modules)
@@ -537,15 +537,6 @@ def main(
 
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size)
-
-    # Used for unconditional training. Not implemented in training config, but may do so manually.
-    uncond_ids = tokenizer(
-                "",
-                truncation=True,
-                padding="max_length",
-                max_length=tokenizer.model_max_length,
-                return_tensors="pt",
-    ).input_ids.to(accelerator.device)
 
      # Latents caching
     cached_data_loader = handle_cache_latents(
