@@ -104,5 +104,11 @@ After training, you should see your results in your output directory.
 
 By default, it should be placed at the script root under `./outputs/train_<date>`
 
+## Developing
+
+Please feel free to open a pull request if you have a feature implementation or suggesstion! I welcome all contributions.
+
+I've tried to make the code fairly modular so you can hack away and see how the code works and what it's doing.
+
 ## Deprecation
 If you want to use the V1 repository, you can use the branch [here](https://github.com/ExponentialML/Text-To-Video-Finetuning/tree/version/first-release).
