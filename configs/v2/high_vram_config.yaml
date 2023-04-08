@@ -57,6 +57,10 @@ unet_lora_modules:
 text_encoder_lora_modules:
   - "CLIPEncoderLayer"
 
+# The rank for LoRA training. With ModelScope, the maximum should be 1024. 
+# VRAM increases with higher rank, lower when decreased.
+lora_rank: 16
+
 # Training data parameters
 train_data:
 

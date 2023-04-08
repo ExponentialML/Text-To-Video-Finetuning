@@ -180,7 +180,7 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_t
     except:
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
-def inject_lora(use_lora, model, replace_modules, is_extended=False):
+def inject_lora(use_lora, model, replace_modules, is_extended=False, rank: int = 16):
     injector = (
         inject_trainable_lora if not is_extended 
     else 
@@ -195,7 +195,8 @@ def inject_lora(use_lora, model, replace_modules, is_extended=False):
 
         params, negation = injector(
             model,
-            target_replace_module=REPLACE_MODULES
+            target_replace_module=REPLACE_MODULES,
+            r=rank
         )   
          
         for _up, _down in extract_lora_ups_down(
@@ -495,6 +496,7 @@ def main(
     use_text_lora: bool = False,
     unet_lora_modules: Tuple[str] = ["ResnetBlock2D"],
     text_encoder_lora_modules: Tuple[str] = ["CLIPEncoderLayer"],
+    lora_rank: int = 16,
     **kwargs
 ):
 
@@ -540,10 +542,14 @@ def main(
 
     # Use LoRA if enabled.    
     unet_lora_params, unet_negation = inject_lora(
-        use_unet_lora, unet, unet_lora_modules, is_extended=True)
+        use_unet_lora, unet, unet_lora_modules, is_extended=True,
+        rank=lora_rank
+        )
 
     text_encoder_lora_params, text_encoder_negation = inject_lora(
-        use_text_lora, text_encoder, text_encoder_lora_modules)
+        use_text_lora, text_encoder, text_encoder_lora_modules,
+        rank=lora_rank
+        )
 
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
     optim_params = [
@@ -735,16 +741,24 @@ def main(
         # This allows us to train text information only on the spatial layers.
         losses = []
         should_truncate_video = (video_length > 1 and text_trainable)
-        
+
+        # We detach the encoder hidden states for the first pass (video frames > 1)
+        # Then we make a clone of the initial state to ensure we can train it in the loop.
+        detached_encoder_state = encoder_hidden_states.clone().detach()
+        trainable_encoder_state = encoder_hidden_states.clone()
+
         for i in range(2):
-            
+
+            should_detach = noisy_latents.shape[2] > 1 and i == 0
+
             if should_truncate_video and i == 1:
                 noisy_latents = noisy_latents[:,:,1,:,:].unsqueeze(2)
                 target = target[:,:,1,:,:].unsqueeze(2)
+                       
+            encoder_hidden_states = (
+                detached_encoder_state if should_detach else trainable_encoder_state
+            )
 
-            if video_length > 1:
-                encoder_hidden_states = encoder_hidden_states.detach()
-                
             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states=encoder_hidden_states).sample
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
