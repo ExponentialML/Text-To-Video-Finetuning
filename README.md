@@ -68,29 +68,19 @@ You can automatically caption the videos using the [Video-BLIP2-Preprocessor Scr
 
 The configuration uses a YAML config borrowed from [Tune-A-Video](https://github.com/showlab/Tune-A-Video) reposotories. 
 
-All configuration details are placed in `configs/v2/high_vram_config.yaml`. Each parameter has a definition for what it does.
+All configuration details are placed in `configs/v2/train_config.yaml`. Each parameter has a definition for what it does.
 
 ### How would you recommend I proceed with making a config with my data?
 
-I highly recommend (I did this myself) going to `configs/v2/high_vram_config.yaml`. Then make a copy of it and name it whatever you wish `my_train.yaml`.
+I highly recommend (I did this myself) going to `configs/v2/train_config.yaml`. Then make a copy of it and name it whatever you wish `my_train.yaml`.
 
 Then, follow each line and configure it for your specific use case. 
 
 The instructions should be clear enough to get you up and running with your dataset, but feel free to ask any questions in the discussion board.
 
-### Finetuning on high VRAM systems.
+### Finetune.
 ```python
-python train.py --config ./configs/v2/high_vram_config.yaml
-```
-
-### Finetuning on low VRAM systems.
-```python
-python train.py --config ./configs/v2/low_vram_config.yaml
-```
-
-### Finetuning on single images.
-```python
-python train.py --config ./configs/v2/image_training.yaml
+python train.py --config ./configs/v2/train_config.yaml
 ```
 ---
 
