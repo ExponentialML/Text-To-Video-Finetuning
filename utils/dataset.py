@@ -557,7 +557,7 @@ class VideoFolderDataset(Dataset):
 
         prompt_ids = self.get_prompt_ids(prompt)
 
-        return {"pixel_values": (video / 127.5 - 1.0), "prompt_ids": prompt_ids[0], "text_prompt": prompt, 'dataset': self.__getname__()}
+        return {"pixel_values": (video[0 / 127.5 - 1.0), "prompt_ids": prompt_ids[0], "text_prompt": prompt, 'dataset': self.__getname__()}
 
 class CachedDataset(Dataset):
     def __init__(self,cache_dir: str = ''):
