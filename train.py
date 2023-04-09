@@ -713,7 +713,7 @@ def main(
         if text_trainable:
             text_encoder.train()
 
-            if use_text_lora and text_encoder_gradient_checkpointing: 
+            if use_text_lora: 
                 text_encoder.text_model.embeddings.requires_grad_(True)
 
             if global_step == 0 and train_text_encoder:
