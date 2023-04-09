@@ -207,7 +207,10 @@ class VideoDataset(Dataset):
 
     def __len__(self):
         if self.train_data is not None:
-            return len(self.train_data['data'])
+            try:
+                return len(self.train_data['data'])
+            except:
+                return 1
         else:
             return 1
 
