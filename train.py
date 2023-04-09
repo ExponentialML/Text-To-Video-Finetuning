@@ -722,7 +722,12 @@ def main(
             )
             cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
                 
-
+        # Fixes gradient checkpointing training.
+        # See: https://github.com/prigoyal/pytorch_memonger/blob/master/tutorial/Checkpointing_for_PyTorch_models.ipynb
+        if gradient_checkpointing or text_encoder_gradient_checkpointing:
+            unet.eval()
+            text_encoder.eval()
+            
         # Encode text embeddings
         token_ids = batch['prompt_ids']
         encoder_hidden_states = text_encoder(token_ids)[0]
