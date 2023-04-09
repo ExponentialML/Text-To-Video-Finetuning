@@ -1,7 +1,10 @@
 # Text-To-Video-Finetuning
 ## Finetune ModelScope's Text To Video model using Diffusers 🧨 
 
+[output.webm](https://user-images.githubusercontent.com/59846140/230748413-fe91e90b-94b9-49ea-97ec-250469ee9472.webm)
+
 ### Updates
+- **2023-4-8**: Version 2 is released! 
 - **2023-3-29**: Added gradient checkpointing support. 
 - **2023-3-27**: Support for using Scaled Dot Product Attention for Torch 2.0 users. 
 
