@@ -367,9 +367,7 @@ def handle_trainable_modules(model, trainable_modules=None, is_enabled=True, neg
                     model.requires_grad_(is_enabled)
                     unfrozen_params =len(list(model.parameters()))
                     break
-                should_negate = negate_params(name, negation)
-                if should_negate: continue
-
+                    
                 if tm in name and 'lora' not in name:
                     for m in module.parameters():
                         m.requires_grad_(is_enabled)
