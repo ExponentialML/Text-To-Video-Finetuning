@@ -420,7 +420,7 @@ class ImageDataset(Dataset):
         try:
             img = torchvision.io.read_image(img, mode=torchvision.io.ImageReadMode.RGB)
         except:
-            img = T.transforms.ToTensor()(Image.open(img).convert("RGB"))
+            img = T.transforms.PILToTensor()(Image.open(img).convert("RGB"))
 
         width = self.width
         height = self.height
