@@ -552,8 +552,10 @@ def main(
 
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
     optim_params = [
-        param_optim(unet, trainable_modules is not None, negation=unet_negation),
-        param_optim(text_encoder, train_text_encoder and not use_text_lora, negation=text_encoder_negation),
+        param_optim(unet, trainable_modules is not None, extra_params=extra_unet_params, negation=unet_negation),
+        param_optim(text_encoder, train_text_encoder and not use_text_lora, extra_params=extra_text_encoder_params, 
+                    negation=text_encoder_negation
+                   ),
         param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, extra_params={"lr": 5e-5}),
         param_optim(unet_lora_params, use_unet_lora, is_lora=True, extra_params={"lr": 5e-6})
     ]
