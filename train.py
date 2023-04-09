@@ -233,8 +233,7 @@ def create_optim_params(name='param', params=None, lr=5e-6, extra_params=None):
     params = {
         "name": name, 
         "params": params, 
-        "lr": lr, 
-        "extra_params": extra_params 
+        "lr": lr
     }
 
     if extra_params is not None:
