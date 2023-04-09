@@ -507,9 +507,9 @@ class VideoFolderDataset(Dataset):
         effective_length = len(vr) // every_nth_frame
 
         if effective_length < self.n_sample_frames:
-            return self.__getitem__(random.randint(0, len(self.video_files) - 1))
+            return self.__getitem__(random.randint(1, len(self.video_files) - 1))
 
-        effective_idx = random.randint(0, effective_length - self.n_sample_frames)
+        effective_idx = random.randint(1, effective_length - self.n_sample_frames)
 
         idxs = every_nth_frame * np.arange(effective_idx, effective_idx + self.n_sample_frames)
 
