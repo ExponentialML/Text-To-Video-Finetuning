@@ -502,12 +502,15 @@ class VideoFolderDataset(Dataset):
 
     def get_frame_batch(self, vr, resize=None):
         native_fps = vr.get_avg_fps()
-        every_nth_frame = round(native_fps / self.fps)
+        every_nth_frame = max(1, round(native_fps / self.fps))
 
         effective_length = len(vr) // every_nth_frame
 
         if effective_length < self.n_sample_frames:
-            return self.__getitem__(random.randint(1, len(self.video_files) - 1))
+            raise ValueError(
+                f"Video is too short to sample {self.n_sample_frames} frames at {self.fps} fps. "
+                f"Native video framerate is {native_fps} with length {len(vr)} frames."
+            )
 
         effective_idx = random.randint(1, effective_length - self.n_sample_frames)
 
