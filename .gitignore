@@ -1,3 +1,7 @@
+output/
+models/lama.ckpt
+.vscode/
+models/model_scope_diffusers/
 text-to-video-ms-1.7b/
 
 # Byte-compiled / optimized / DLL files
