@@ -35,10 +35,24 @@ from diffusers.models.attention_processor import AttnProcessor2_0, Attention
 from diffusers.models.attention import BasicTransformerBlock
 
 from transformers import CLIPTextModel, CLIPTokenizer
-from utils.dataset import VideoDataset, VideoFolderDataset
+from transformers.models.clip.modeling_clip import CLIPEncoder
+from utils.dataset import VideoJsonDataset, SingleVideoDataset, \
+    ImageDataset, VideoFolderDataset, CachedDataset
 from einops import rearrange, repeat
 
-already_printed_unet = False
+from lora_diffusion import (
+    extract_lora_ups_down,
+    inject_trainable_lora,
+    inject_trainable_lora_extended,
+    safetensors_available,
+    save_lora_weight,
+    save_safeloras,
+    collapse_lora,
+    monkeypatch_remove_lora
+)
+
+
+already_printed_trainables = False
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.10.0.dev0")
@@ -60,6 +74,41 @@ def accelerate_set_verbose(accelerator):
     else:
         transformers.utils.logging.set_verbosity_error()
         diffusers.utils.logging.set_verbosity_error()
+
+def get_train_dataset(dataset_types, train_data, tokenizer):
+    train_datasets = []
+
+    # Loop through all available datasets, get the name, then add to list of data to process.
+    for DataSet in [VideoJsonDataset, SingleVideoDataset, ImageDataset, VideoFolderDataset]:
+        for dataset in dataset_types:
+            if dataset == DataSet.__getname__():
+                train_datasets.append(DataSet(**train_data, tokenizer=tokenizer))
+
+    if len(train_datasets) > 0:
+        return train_datasets
+    else:
+        raise ValueError("Dataset type not found: 'json', 'single_video', 'folder', 'image'")
+
+def extend_datasets(datasets, dataset_items, extend=False):
+    biggest_data_len = max(x.__len__() for x in datasets)
+    extended = []
+    for dataset in datasets:
+        if dataset.__len__() == 0:
+            del dataset
+            continue
+        if dataset.__len__() < biggest_data_len:
+            for item in dataset_items:
+                if extend and item not in extended and hasattr(dataset, item):
+                    print(f"Extending {item}")
+
+                    value = getattr(dataset, item)
+                    value *= biggest_data_len
+                    value = value[:biggest_data_len]
+
+                    setattr(dataset, item, value)
+
+                    print(f"New {item} dataset length: {dataset.__len__()}")
+                    extended.append(item)
 
 def export_to_video(video_frames, output_video_path, fps):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -88,6 +137,10 @@ def load_primary_models(pretrained_model_path):
 
     return noise_scheduler, tokenizer, text_encoder, vae, unet
 
+def unet_and_text_g_c(unet, text_encoder, unet_enable, text_enable):
+    unet._set_gradient_checkpointing(value=unet_enable)
+    text_encoder._set_gradient_checkpointing(CLIPEncoder, value=text_enable)
+
 def freeze_models(models_to_freeze):
     for model in models_to_freeze:
         if model is not None: model.requires_grad_(False) 
@@ -107,6 +160,7 @@ def set_torch_2_attn(unet):
                 for m in module:
                     if isinstance(m, BasicTransformerBlock):
                         set_processors([m.attn1, m.attn2])
+                        optim_count += 1
     if optim_count > 0: 
         print(f"{optim_count} Attention layers using Scaled Dot Product Attention.")
 
@@ -126,19 +180,103 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_t
     except:
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
-def param_optim(model, condition):
-    return {"model": model, "condition": condition}
+def inject_lora(use_lora, model, replace_modules, is_extended=False, rank: int = 16):
+    injector = (
+        inject_trainable_lora if not is_extended 
+    else 
+        inject_trainable_lora_extended
+    )
+
+    params = None
+    negation = None
+
+    if use_lora:
+        REPLACE_MODULES = replace_modules
+
+        params, negation = injector(
+            model,
+            target_replace_module=REPLACE_MODULES,
+            r=rank
+        )   
+         
+        for _up, _down in extract_lora_ups_down(
+            model, 
+            target_replace_module=REPLACE_MODULES):
+
+            if all(x is not None for x in [_up, _down]):
+                print(f"Lora successfully injected into {model.__class__.__name__}.")
+
+            break
+        
+    return params, negation
+
+def handle_lora_save(use_unet_lora, use_text_lora, model, end_train=False):
+    if end_train:
+        if use_unet_lora:
+            collapse_lora(model.unet)
+            monkeypatch_remove_lora(model.unet)
+            
+        if use_text_lora:
+            collapse_lora(model.text_encoder)
+            monkeypatch_remove_lora(model.text_encoder)
+
+def param_optim(model, condition, extra_params=None, is_lora=False, negation=None):
+    return {
+        "model": model, 
+        "condition": condition, 
+        'extra_params': extra_params,
+        'is_lora': is_lora,
+        "negation": negation
+    }
+    
+
+def create_optim_params(name='param', params=None, lr=5e-6, extra_params=None):
+    params = {
+        "name": name, 
+        "params": params, 
+        "lr": lr
+    }
+
+    if extra_params is not None:
+        for k, v in extra_params.items():
+            params[k] = v
+    
+    return params
+
+def negate_params(name, negation):
+    # We have to do this if we are co-training with LoRA.
+    # This ensures that parameter groups aren't duplicated.
+    if negation is None: return False
+    for n in negation:
+        if n in name and 'temp' not in name:
+            return True
+    return False
+
 
 def create_optimizer_params(model_list, lr):
+    import itertools
     optimizer_params = []
 
     for optim in model_list:
+        model, condition, extra_params, is_lora, negation = optim.values()
+        # Check if we are doing LoRA training.
+        if is_lora and condition: 
+            params = create_optim_params(
+                params=itertools.chain(*model), 
+                extra_params=extra_params
+            )
+            optimizer_params.append(params)
+            continue
+
         # If this is true, we can train it.
-        if optim['condition']:
-            optimizer_params.append({
-                "params": optim['model'].parameters(), "lr": lr
-            })
-    
+        if condition:
+            for n, p in model.named_parameters():
+                should_negate = negate_params(n, negation)
+                if should_negate: continue
+
+                params = create_optim_params(n, p, lr, extra_params)
+                optimizer_params.append(params)
+
     return optimizer_params
 
 def get_optimizer(use_8bit_adam):
@@ -169,21 +307,75 @@ def cast_to_gpu_and_type(model_list, accelerator, weight_dtype):
     for model in model_list:
         if model is not None: model.to(accelerator.device, dtype=weight_dtype)
 
-def enable_trainable_unet_modules(model, trainable_modules=None, is_enabled=True):
-    global already_printed_unet
+def handle_cache_latents(
+        should_cache, 
+        output_dir, 
+        train_dataloader, 
+        train_batch_size, 
+        vae, 
+        cached_latent_dir=None
+    ):
+
+    # Cache latents by storing them in VRAM. 
+    # Speeds up training and saves memory by not encoding during the train loop.
+    if not should_cache: return None
+    vae.to('cuda', dtype=torch.float16)
+    vae.enable_slicing()
+    
+    cached_latent_dir = (
+        os.path.abspath(cached_latent_dir) if cached_latent_dir is not None else None 
+        )
+
+    if cached_latent_dir is None:
+        cache_save_dir = f"{output_dir}/cached_latents"
+        os.makedirs(cache_save_dir, exist_ok=True)
+
+        for i, batch in enumerate(tqdm(train_dataloader, desc="Caching Latents.")):
+
+            save_name = f"cached_{i}"
+            full_out_path =  f"{cache_save_dir}/{save_name}.pt"
+
+            pixel_values = batch['pixel_values'].to('cuda', dtype=torch.float16)
+            batch['pixel_values'] = tensor_to_vae_latent(pixel_values, vae)
+            for k, v in batch.items(): batch[k] = v[0]
+        
+            torch.save(batch, full_out_path)
+            del pixel_values
+            del batch
+
+            # We do this to avoid fragmentation from casting latents between devices.
+            torch.cuda.empty_cache()
+    else:
+        cache_save_dir = cached_latent_dir
+        
+
+    return torch.utils.data.DataLoader(
+        CachedDataset(cache_dir=cache_save_dir), 
+        batch_size=train_batch_size, 
+        shuffle=True,
+        num_workers=0
+    ) 
+
+def handle_trainable_modules(model, trainable_modules=None, is_enabled=True, negation=None):
+    global already_printed_trainables
 
     # This can most definitely be refactored :-)
     unfrozen_params = 0
     if trainable_modules is not None:
         for name, module in model.named_modules():
             for tm in tuple(trainable_modules):
-                if tm in name:
+                if tm == 'all':
+                    model.requires_grad_(is_enabled)
+                    unfrozen_params =len(list(model.parameters()))
+                    break
+                    
+                if tm in name and 'lora' not in name:
                     for m in module.parameters():
                         m.requires_grad_(is_enabled)
                         if is_enabled: unfrozen_params +=1
 
-    if unfrozen_params > 0 and not already_printed_unet:
-        already_printed_unet = True 
+    if unfrozen_params > 0 and not already_printed_trainables:
+        already_printed_trainables = True 
         print(f"{unfrozen_params} params have been unfrozen for training.")
 
 def tensor_to_vae_latent(t, vae):
@@ -216,13 +408,61 @@ def replace_prompt(prompt, token, wlist):
         if w in prompt: return prompt.replace(w, token)
     return prompt 
 
+def save_pipe(
+        path, 
+        global_step,
+        accelerator, 
+        unet, 
+        text_encoder, 
+        vae, 
+        output_dir,
+        use_unet_lora,
+        use_text_lora,
+        is_checkpoint=False
+    ):
+
+    if is_checkpoint:
+        save_path = os.path.join(output_dir, f"checkpoint-{global_step}")
+        os.makedirs(save_path, exist_ok=True)
+    else:
+        save_path = output_dir
+
+    # Save the dtypes so we can continue training at the same precision.
+    u_dtype, t_dtype, v_dtype = unet.dtype, text_encoder.dtype, vae.dtype 
+
+    # We do this to prevent OOM during training when saving a checkpoint.
+    [x.to('cpu') for x in [unet, text_encoder, vae]]
+
+    pipeline = TextToVideoSDPipeline.from_pretrained(
+        path,
+        unet=unet,
+        text_encoder=text_encoder,
+        vae=vae,
+    )
+    
+    handle_lora_save(use_unet_lora, use_text_lora, pipeline, end_train=not is_checkpoint)
+    pipeline.save_pretrained(save_path)
+    
+    if is_checkpoint:
+        models_to_cast_back = [(unet, u_dtype), (text_encoder, t_dtype), (vae, v_dtype)]
+        [x[0].to(accelerator.device, dtype=x[1]) for x in models_to_cast_back]
+
+    logger.info(f"Saved model at {save_path} on step {global_step}")
+    
+    del pipeline
+    torch.cuda.empty_cache()
+
 def main(
     pretrained_model_path: str,
     output_dir: str,
     train_data: Dict,
     validation_data: Dict,
+    dataset_types: Tuple[str] = ('json'),
     validation_steps: int = 100,
-    trainable_modules: Tuple[str] = ("attn1", "attn2" ),
+    trainable_modules: Tuple[str] = ("attn1", "attn2"),
+    trainable_text_modules: Tuple[str] = ("all"),
+    extra_unet_params = None,
+    extra_text_encoder_params = None,
     train_batch_size: int = 1,
     max_train_steps: int = 500,
     learning_rate: float = 5e-5,
@@ -236,6 +476,7 @@ def main(
     max_grad_norm: float = 1.0,
     gradient_accumulation_steps: int = 1,
     gradient_checkpointing: bool = False,
+    text_encoder_gradient_checkpointing: bool = False,
     checkpointing_steps: int = 500,
     resume_from_checkpoint: Optional[str] = None,
     mixed_precision: Optional[str] = "fp16",
@@ -246,9 +487,16 @@ def main(
     train_text_encoder: bool = False,
     use_offset_noise: bool = False,
     offset_noise_strength: float = 0.1,
+    extend_dataset: bool = False,
+    cache_latents: bool = False,
+    cached_latent_dir = None,
+    use_unet_lora: bool = False,
+    use_text_lora: bool = False,
+    unet_lora_modules: Tuple[str] = ["ResnetBlock2D"],
+    text_encoder_lora_modules: Tuple[str] = ["CLIPEncoderLayer"],
+    lora_rank: int = 16,
     **kwargs
 ):
-
 
     *_, config = inspect.getargvalues(inspect.currentframe())
 
@@ -290,11 +538,27 @@ def main(
     # Initialize the optimizer
     optimizer_cls = get_optimizer(use_8bit_adam)
 
+    # Use LoRA if enabled.    
+    unet_lora_params, unet_negation = inject_lora(
+        use_unet_lora, unet, unet_lora_modules, is_extended=True,
+        rank=lora_rank
+        )
+
+    text_encoder_lora_params, text_encoder_negation = inject_lora(
+        use_text_lora, text_encoder, text_encoder_lora_modules,
+        rank=lora_rank
+        )
+
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
     optim_params = [
-        param_optim(unet, trainable_modules is not None),
-        param_optim(text_encoder, train_text_encoder == True),
+        param_optim(unet, trainable_modules is not None, extra_params=extra_unet_params, negation=unet_negation),
+        param_optim(text_encoder, train_text_encoder and not use_text_lora, extra_params=extra_text_encoder_params, 
+                    negation=text_encoder_negation
+                   ),
+        param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, extra_params={"lr": 5e-5}),
+        param_optim(unet_lora_params, use_unet_lora, is_lora=True, extra_params={"lr": 5e-6})
     ]
+
     params = create_optimizer_params(optim_params, learning_rate)
     
     # Create Optimizer
@@ -314,25 +578,40 @@ def main(
         num_training_steps=max_train_steps * gradient_accumulation_steps,
     )
 
-    # Get the training dataset
-    if train_data.pop("type", "regular") == "folder":
-        train_dataset = VideoFolderDataset(**train_data, tokenizer=tokenizer)
+    # Get the training dataset based on types (json, single_video, image)
+    train_datasets = get_train_dataset(dataset_types, train_data, tokenizer)
+
+    # Extend datasets that are less than the greatest one. This allows for more balanced training.
+    attrs = ['train_data', 'frames', 'image_dir', 'video_files']
+    extend_datasets(train_datasets, attrs, extend=extend_dataset)
+
+    # Process one dataset
+    if len(train_datasets) == 1:
+        train_dataset = train_datasets[0]
+    
+    # Process many datasets
     else:
-        train_dataset = VideoDataset(**train_data, tokenizer=tokenizer)
+        train_dataset = torch.utils.data.ConcatDataset(train_datasets) 
 
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=train_batch_size, shuffle=True
+        train_dataset, 
+        batch_size=train_batch_size,
+        shuffle=True
     )
 
-    # Used for unconditional training. Not implemented in training config, but may do so manually.
-    uncond_ids = tokenizer(
-                "",
-                truncation=True,
-                padding="max_length",
-                max_length=tokenizer.model_max_length,
-                return_tensors="pt",
-    ).input_ids.to(accelerator.device)
+     # Latents caching
+    cached_data_loader = handle_cache_latents(
+        cache_latents, 
+        output_dir,
+        train_dataloader, 
+        train_batch_size, 
+        vae,
+        cached_latent_dir
+    ) 
+
+    if cached_data_loader is not None: 
+        train_dataloader = cached_data_loader
 
     # Prepare everything with our `accelerator`.
     unet, optimizer,train_dataloader, lr_scheduler, text_encoder = accelerator.prepare(
@@ -344,7 +623,12 @@ def main(
     )
 
     # Use Gradient Checkpointing if enabled.
-    unet._set_gradient_checkpointing(value=gradient_checkpointing)
+    unet_and_text_g_c(
+        unet, 
+        text_encoder, 
+        gradient_checkpointing, 
+        text_encoder_gradient_checkpointing
+    )
     
     # Enable VAE slicing to save memory.
     vae.enable_slicing()
@@ -386,16 +670,31 @@ def main(
     progress_bar.set_description("Steps")
 
     def finetune_unet(batch, train_encoder=False):
+        
+        # Check if we are training the text encoder
+        text_trainable = (train_text_encoder or use_text_lora)
+        
+        # Unfreeze UNET Layers
+        if global_step == 0: 
+            already_printed_trainables = False
+            unet.train()
+            handle_trainable_modules(
+                unet, 
+                trainable_modules, 
+                is_enabled=True,
+                negation=unet_negation
+            )
 
-        # Set noise scheduler to cosine (this can be done via config, but this ensures it's enabled)
-        #noise_scheduler.beta_schedule = "squaredcos_cap_v2"
-        
-        unet.train()
-        
         # Convert videos to latent space
-        pixel_values = batch["pixel_values"].to(weight_dtype)
+        pixel_values = batch["pixel_values"]
 
-        latents = tensor_to_vae_latent(pixel_values, vae)
+        if not cache_latents:
+            latents = tensor_to_vae_latent(pixel_values, vae)
+        else:
+            latents = pixel_values
+
+        # Get video length
+        video_length = latents.shape[2]
 
         # Sample noise that we'll add to the latents
         noise = sample_noise(latents, offset_noise_strength, use_offset_noise)
@@ -408,32 +707,76 @@ def main(
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-        
+    
         # Enable text encoder training
-        if train_encoder:
+        if text_trainable:
             text_encoder.train()
-            cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)    
-            text_encoder.requires_grad_(True)
-        else:
-            text_encoder.requires_grad_(False)
 
-        enable_trainable_unet_modules(unet, trainable_modules, is_enabled=True)
+            if use_text_lora: 
+                text_encoder.text_model.embeddings.requires_grad_(True)
 
-        # Get the text embedding for conditioning
-        encoder_hidden_states = text_encoder(batch['prompt_ids'])[0]
+            if global_step == 0 and train_text_encoder:
+                handle_trainable_modules(
+                    text_encoder, 
+                    trainable_modules=trainable_text_modules,
+                    negation=text_encoder_negation
+            )
+            cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
+                
+        # Fixes gradient checkpointing training.
+        # See: https://github.com/prigoyal/pytorch_memonger/blob/master/tutorial/Checkpointing_for_PyTorch_models.ipynb
+        if gradient_checkpointing or text_encoder_gradient_checkpointing:
+            unet.eval()
+            text_encoder.eval()
+            
+        # Encode text embeddings
+        token_ids = batch['prompt_ids']
+        encoder_hidden_states = text_encoder(token_ids)[0]
 
         # Get the target for loss depending on the prediction type
         if noise_scheduler.prediction_type == "epsilon":
             target = noise
+
         elif noise_scheduler.prediction_type == "v_prediction":
             target = noise_scheduler.get_velocity(latents, noise, timesteps)
+
         else:
             raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
 
         
-        # Predict the noise residual and compute loss
-        model_pred = unet(noisy_latents, timesteps, encoder_hidden_states=encoder_hidden_states).sample
-        loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+        # Here we do two passes for video and text training.
+        # If we are on the second iteration of the loop, get one frame.
+        # This allows us to train text information only on the spatial layers.
+        losses = []
+        should_truncate_video = (video_length > 1 and text_trainable)
+
+        # We detach the encoder hidden states for the first pass (video frames > 1)
+        # Then we make a clone of the initial state to ensure we can train it in the loop.
+        detached_encoder_state = encoder_hidden_states.clone().detach()
+        trainable_encoder_state = encoder_hidden_states.clone()
+
+        for i in range(2):
+
+            should_detach = noisy_latents.shape[2] > 1 and i == 0
+
+            if should_truncate_video and i == 1:
+                noisy_latents = noisy_latents[:,:,1,:,:].unsqueeze(2)
+                target = target[:,:,1,:,:].unsqueeze(2)
+                       
+            encoder_hidden_states = (
+                detached_encoder_state if should_detach else trainable_encoder_state
+            )
+
+            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states=encoder_hidden_states).sample
+            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+            losses.append(loss)
+            
+            # This was most likely single frame training or a single image.
+            if video_length == 1 and i == 0: break
+
+        loss = losses[0] if len(losses) == 1 else losses[0] + losses[1] 
+
         return loss, latents
 
     for epoch in range(first_epoch, num_train_epochs):
@@ -446,7 +789,7 @@ def main(
                     progress_bar.update(1)
                 continue
             
-            with accelerator.accumulate(unet) ,accelerator.accumulate(text_encoder.text_model.encoder):
+            with accelerator.accumulate(unet) ,accelerator.accumulate(text_encoder):
 
                 text_prompt = batch['text_prompt'][0]
                 
@@ -460,12 +803,16 @@ def main(
                 # Backpropagate
                 try:
                     accelerator.backward(loss)
-                    if accelerator.sync_gradients:
-                        accelerator.clip_grad_norm_(filter(lambda p: p.requires_grad, unet.parameters()), max_grad_norm)
+                    params_to_clip = (
+                        unet.parameters() if not train_text_encoder 
+                    else 
+                        list(unet.parameters()) + list(text_encoder.parameters())
+                    )
+                    accelerator.clip_grad_norm_(params_to_clip, max_grad_norm)
                 
                     optimizer.step()
                     lr_scheduler.step()
-                    optimizer.zero_grad()
+                    optimizer.zero_grad(set_to_none=True)
                     
                 except Exception as e:
                     print(f"An error has occured during backpropogation! {e}") 
@@ -479,29 +826,27 @@ def main(
                 train_loss = 0.0
             
                 if global_step % checkpointing_steps == 0:
-                    
-                    save_path = os.path.join(output_dir, f"checkpoint-{global_step}")
-                    os.makedirs(save_path, exist_ok=True)
-                    unet = accelerator.unwrap_model(unet)
-
-                    pipeline = TextToVideoSDPipeline.from_pretrained(
-                        pretrained_model_path,
-                        text_encoder=text_encoder,
-                        vae=vae,
-                        unet=unet,
+                    save_pipe(
+                        pretrained_model_path, 
+                        global_step, 
+                        accelerator, 
+                        unet, 
+                        text_encoder, 
+                        vae, 
+                        output_dir, 
+                        use_unet_lora, 
+                        use_text_lora,
+                        is_checkpoint=True
                     )
-                    
-                    pipeline.save_pretrained(save_path)
-                    logger.info(f"Saved model at {save_path} on step {global_step}")
-
-                    del pipeline
 
                 if should_sample(global_step, validation_steps, validation_data):
                     if global_step == 1: print("Performing validation prompt.")
                     if accelerator.is_main_process:
+
                         with accelerator.autocast():
                             unet.eval()
                             text_encoder.eval()
+                            unet_and_text_g_c(unet, text_encoder, False, False)
                             
                             pipeline = TextToVideoSDPipeline.from_pretrained(
                                 pretrained_model_path,
@@ -514,7 +859,11 @@ def main(
                             pipeline.scheduler = diffusion_scheduler
 
                             prompt = text_prompt if len(validation_data.prompt) <= 0 else validation_data.prompt
-                            out_file = f"{output_dir}/samples/{global_step}_{prompt}.mp4"
+
+                            curr_dataset_name = batch['dataset']
+                            save_filename = f"{global_step}_dataset-{curr_dataset_name}_{prompt}"
+
+                            out_file = f"{output_dir}/samples/{save_filename}.mp4"
                             
                             with torch.no_grad():
                                 video_frames = pipeline(
@@ -528,9 +877,16 @@ def main(
                             export_to_video(video_frames, out_file, train_data.get('fps', 8))
 
                             del pipeline
-                            gc.collect()
+                            torch.cuda.empty_cache()
 
                     logger.info(f"Saved a new sample to {out_file}")
+
+                    unet_and_text_g_c(
+                        unet, 
+                        text_encoder, 
+                        gradient_checkpointing, 
+                        text_encoder_gradient_checkpointing
+                    )
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             accelerator.log({"training_loss": loss.detach().item()}, step=step)
@@ -542,16 +898,18 @@ def main(
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-
-        unet = accelerator.unwrap_model(unet)
-        pipeline = TextToVideoSDPipeline.from_pretrained(
-            pretrained_model_path,
-            text_encoder=text_encoder,
-            vae=vae,
-            unet=unet,
-        )
-        pipeline.save_pretrained(output_dir)
-            
+        save_pipe(
+                pretrained_model_path, 
+                global_step, 
+                accelerator, 
+                unet, 
+                text_encoder, 
+                vae, 
+                output_dir, 
+                use_unet_lora, 
+                use_text_lora,
+                is_checkpoint=False
+        )      
     accelerator.end_training()
 
 if __name__ == "__main__":

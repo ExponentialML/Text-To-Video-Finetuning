@@ -22,6 +22,13 @@ from diffusers.models.transformer_temporal import TransformerTemporalModel
 # Assign gradient checkpoint function to simple variable for readability.
 g_c = checkpoint.checkpoint
 
+def use_temporal(module, num_frames, x):
+    if num_frames == 1:
+        if isinstance(module, TransformerTemporalModel):
+            return {"sample": x}
+        else:
+            return x
+
 def custom_checkpoint(module, mode=None):
     if mode == None: raise ValueError('Mode for gradient checkpointing cannot be none.')
     custom_forward = None
@@ -46,10 +53,21 @@ def custom_checkpoint(module, mode=None):
 
     if mode == 'temp':
          def custom_forward(hidden_states, num_frames=None):
-            inputs = module(hidden_states, num_frames=num_frames)
+            inputs = use_temporal(module, num_frames, hidden_states)
+            if inputs is None: inputs = module(
+                hidden_states, 
+                num_frames=num_frames
+            )
             return inputs
 
     return custom_forward
+
+def transformer_g_c(transformer, sample, num_frames):
+    sample = g_c(custom_checkpoint(transformer, mode='temp'), 
+        sample, num_frames, use_reentrant=False
+    )['sample']
+
+    return sample
 
 def cross_attn_g_c(
         attn, 
@@ -69,11 +87,11 @@ def cross_attn_g_c(
         # Self and CrossAttention
         if idx == 0: return g_c(custom_checkpoint(attn, mode='attn'),
             hidden_states, encoder_hidden_states,cross_attention_kwargs, use_reentrant=False
-        ).sample
+        )['sample']
 
         # Temporal Self and CrossAttention
         if idx == 1: return g_c(custom_checkpoint(temp_attn, mode='temp'), 
-            hidden_states, num_frames, use_reentrant=False).sample
+            hidden_states, num_frames, use_reentrant=False)['sample']
 
         # Resnets
         if idx == 2: return g_c(custom_checkpoint(resnet, mode='resnet'), 
@@ -95,9 +113,9 @@ def cross_attn_g_c(
     return hidden_states
 
 def up_down_g_c(resnet, temp_conv, hidden_states, temb, num_frames):
-    hidden_states = g_c(custom_checkpoint(resnet, mode='resnet'), hidden_states, temb)
+    hidden_states = g_c(custom_checkpoint(resnet, mode='resnet'), hidden_states, temb, use_reentrant=False)
     hidden_states = g_c(custom_checkpoint(temp_conv, mode='temp'), 
-        hidden_states, num_frames
+        hidden_states, num_frames,  use_reentrant=False
     )
     return hidden_states
 
@@ -321,8 +339,18 @@ class UNetMidBlock3DCrossAttn(nn.Module):
         num_frames=1,
         cross_attention_kwargs=None,
     ):
-        hidden_states = self.resnets[0](hidden_states, temb)
-        hidden_states = self.temp_convs[0](hidden_states, num_frames=num_frames)
+        if self.gradient_checkpointing:
+            hidden_states = up_down_g_c(
+                    self.resnets[0], 
+                    self.temp_convs[0], 
+                    hidden_states, 
+                    temb, 
+                    num_frames
+                )
+        else:
+            hidden_states = self.resnets[0](hidden_states, temb)
+            hidden_states = self.temp_convs[0](hidden_states, num_frames=num_frames)
+            
         for attn, temp_attn, resnet, temp_conv in zip(
             self.attentions, self.temp_attentions, self.resnets[1:], self.temp_convs[1:]
         ):
@@ -344,9 +372,14 @@ class UNetMidBlock3DCrossAttn(nn.Module):
                     encoder_hidden_states=encoder_hidden_states,
                     cross_attention_kwargs=cross_attention_kwargs,
                 ).sample
-                hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
+                
+                if num_frames > 1:
+                    hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
+
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
 
         return hidden_states
 
@@ -476,13 +509,18 @@ class CrossAttnDownBlock3D(nn.Module):
                     )
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
                     cross_attention_kwargs=cross_attention_kwargs,
                 ).sample
-                hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
+
+                if num_frames > 1:
+                    hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
 
             output_states += (hidden_states,)
 
@@ -562,7 +600,9 @@ class DownBlock3D(nn.Module):
                 hidden_states = up_down_g_c(resnet, temp_conv, hidden_states, temb, num_frames)
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
 
             output_states += (hidden_states,)
 
@@ -700,13 +740,18 @@ class CrossAttnUpBlock3D(nn.Module):
                     )
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
                     cross_attention_kwargs=cross_attention_kwargs,
                 ).sample
-                hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
+
+                if num_frames > 1:
+                    hidden_states = temp_attn(hidden_states, num_frames=num_frames).sample
 
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
@@ -735,7 +780,7 @@ class UpBlock3D(nn.Module):
         super().__init__()
         resnets = []
         temp_convs = []
-
+        self.gradient_checkpointing = False
         for i in range(num_layers):
             res_skip_channels = in_channels if (i == num_layers - 1) else out_channels
             resnet_in_channels = prev_output_channel if i == 0 else out_channels
@@ -780,7 +825,9 @@ class UpBlock3D(nn.Module):
                 hidden_states = up_down_g_c(resnet, temp_conv, hidden_states, temb, num_frames)
             else:
                 hidden_states = resnet(hidden_states, temb)
-                hidden_states = temp_conv(hidden_states, num_frames=num_frames)
+
+                if num_frames > 1:
+                    hidden_states = temp_conv(hidden_states, num_frames=num_frames)
 
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
