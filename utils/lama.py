@@ -15,15 +15,19 @@ Apache License 2.0: https://github.com/advimman/lama/blob/main/LICENSE
 }
 """
 
-from PIL import Image
+import os
+import sys
+from urllib.request import urlretrieve
+
 import torch
+from einops import rearrange
+from PIL import Image
 from torch import nn
 from torch.nn import functional as F
 from torchvision.transforms.functional import to_tensor
-import os
-
-from urllib.request import urlretrieve
 from tqdm import tqdm
+
+from train import export_to_video
 
 
 LAMA_URL = "https://huggingface.co/akhaliq/lama/resolve/main/best.ckpt"
@@ -326,10 +330,7 @@ def inpaint_watermark(imgs):
 
 
 if __name__ == "__main__":
-    import sys
     import decord
-    from einops import rearrange
-    from train import export_to_video
 
     decord.bridge.set_bridge("torch")
 
@@ -338,13 +339,12 @@ if __name__ == "__main__":
         sys.exit(1)
 
     video_path = sys.argv[1]
+    out_path = video_path.replace(".mp4", " inpainted.mp4")
 
     vr = decord.VideoReader(video_path)
     fps = vr.get_avg_fps()
     video = rearrange(vr[:], "f h w c -> f c h w").div(255)
 
     inpainted = inpaint_watermark(video)
-
     inpainted = rearrange(inpainted, "f c h w -> f h w c").clamp(0, 1).mul(255).byte().cpu().numpy()
-
-    export_to_video(inpainted, video_path.replace(".mp4", " inpainted.mp4"), fps)
+    export_to_video(inpainted, out_path, fps)
