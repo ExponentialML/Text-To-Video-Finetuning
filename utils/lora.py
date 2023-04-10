@@ -983,12 +983,12 @@ def monkeypatch_remove_lora(model):
                 padding=_source.padding,
             )
 
-            _tmp.conv.weight = weight
-
+            _tmp.weight = weight
             if bias is not None:
-                _tmp.conv.bias = bias    
+                _tmp.bias = bias   
 
         _module._modules[name] = _tmp
+
 
 
 def monkeypatch_add_lora(
