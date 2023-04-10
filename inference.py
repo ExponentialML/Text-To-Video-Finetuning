@@ -1,14 +1,22 @@
+import os
 import argparse
+import warnings
 from uuid import uuid4
 
 import torch
 from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
+from einops import rearrange
 
 from train import export_to_video, handle_memory_attention, load_primary_models
+from utils.lama import inpaint_watermark
 
 
 def initialize_pipeline(model, device="cuda", xformers=False, sdp=False):
-    scheduler, tokenizer, text_encoder, vae, unet = load_primary_models(model)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+
+        scheduler, tokenizer, text_encoder, vae, unet = load_primary_models(model)
+
     pipeline = TextToVideoSDPipeline.from_pretrained(
         pretrained_model_name_or_path=model,
         scheduler=scheduler,
@@ -69,15 +77,28 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--device", type=str, default="cuda")
     parser.add_argument("-x", "--xformers", action="store_true")
     parser.add_argument("-S", "--sdp", action="store_true")
+    parser.add_argument("-rw", "--remove-watermark", action="store_true")
     args = vars(parser.parse_args())
 
     output_dir = args.pop("output_dir")
     prompt = args.get("prompt")
     fps = args.pop("fps")
+    remove_watermark = args.pop("remove_watermark")
 
     videos = inference(**args)
 
+    os.makedirs(output_dir, exist_ok=True)
+
     for video in videos:
-        video = video.permute(1, 2, 3, 0).clamp(-1, 1).add(1).mul(127.5).byte().cpu().numpy()
-        out_file = f"{output_dir}/{prompt} {str(uuid4())[:8]}.mp4"
-        export_to_video(video, out_file, fps)
+
+        if remove_watermark:
+            video = rearrange(video, "c f h w -> f c h w").add(1).div(2)
+            video = inpaint_watermark(video)
+            video = rearrange(video, "f c h w -> f h w c").clamp(0, 1).mul(255)
+
+        else:
+            video = rearrange(video, "c f h w -> f h w c").clamp(-1, 1).add(1).mul(127.5)
+
+        video = video.byte().cpu().numpy()
+
+        export_to_video(video, f"{output_dir}/{prompt} {str(uuid4())[:8]}.mp4", fps)
