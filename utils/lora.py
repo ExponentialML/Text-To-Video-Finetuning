@@ -235,83 +235,6 @@ class LoraInjectedConv3d(nn.Module):
             self.lora_up.weight.device
         ).to(self.lora_up.weight.dtype)
 
-class LoraInjectedConv3d(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: (3, 1, 1),
-        padding: (1, 0, 0),
-        bias: bool = False,
-        r: int = 4,
-        dropout_p: float = 0,
-        scale: float = 1.0,
-    ):
-        super().__init__()
-        if r > min(in_channels, out_channels):
-            raise ValueError(
-                f"LoRA rank {r} must be less or equal than {min(in_channels, out_channels)}"
-            )
-
-        self.r = r
-        self.kernel_size = kernel_size
-        self.padding = padding
-        self.conv = nn.Conv3d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            padding=padding,
-        )
-
-        self.lora_down = nn.Conv3d(
-            in_channels=in_channels,
-            out_channels=r,
-            kernel_size=kernel_size,
-            bias=False,
-            padding=padding
-        )
-        self.dropout = nn.Dropout(dropout_p)
-        self.lora_up = nn.Conv3d(
-            in_channels=r,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            bias=False,
-            padding=padding
-        )
-        self.selector = nn.Identity()
-        self.scale = scale
-
-        nn.init.normal_(self.lora_down.weight, std=1 / r)
-        nn.init.zeros_(self.lora_up.weight)
-
-    def forward(self, input):
-        return (
-            self.conv(input)
-            + self.dropout(self.lora_up(self.selector(self.lora_down(input))))
-            * self.scale
-        )
-
-    def realize_as_lora(self):
-        return self.lora_up.weight.data * self.scale, self.lora_down.weight.data
-
-    def set_selector_from_diag(self, diag: torch.Tensor):
-        # diag is a 1D tensor of size (r,)
-        assert diag.shape == (self.r,)
-        self.selector = nn.Conv3d(
-            in_channels=self.r,
-            out_channels=self.r,
-            kernel_size=self.kernel_size,
-            bias=False,
-            padding=self.padding
-        )
-        self.selector.weight.data = torch.diag(diag)
-
-        # same device + dtype as lora_up
-        self.selector.weight.data = self.selector.weight.data.to(
-            self.lora_up.weight.device
-        ).to(self.lora_up.weight.dtype)
-
-
 UNET_DEFAULT_TARGET_REPLACE = {"CrossAttention", "Attention", "GEGLU"}
 
 UNET_EXTENDED_TARGET_REPLACE = {"ResnetBlock2D", "CrossAttention", "Attention", "GEGLU"}
@@ -558,7 +481,7 @@ def extract_lora_ups_down(model, target_replace_module=DEFAULT_TARGET_REPLACE):
     for _m, _n, _child_module in _find_modules(
         model,
         target_replace_module,
-        search_class=[LoraInjectedLinear, LoraInjectedConv2d],
+        search_class=[LoraInjectedLinear, LoraInjectedConv2d, LoraInjectedConv3d],
     ):
         loras.append((_child_module.lora_up, _child_module.lora_down))
 
@@ -577,7 +500,7 @@ def extract_lora_as_tensor(
     for _m, _n, _child_module in _find_modules(
         model,
         target_replace_module,
-        search_class=[LoraInjectedLinear, LoraInjectedConv2d],
+        search_class=[LoraInjectedLinear, LoraInjectedConv2d, LoraInjectedConv3d],
     ):
         up, down = _child_module.realize_as_lora()
         if as_fp16:
@@ -601,8 +524,8 @@ def save_lora_weight(
     for _up, _down in extract_lora_ups_down(
         model, target_replace_module=target_replace_module
     ):
-        weights.append(_up.weight.to("cpu").to(torch.float16))
-        weights.append(_down.weight.to("cpu").to(torch.float16))
+        weights.append(_up.weight.to("cpu").to(torch.float32))
+        weights.append(_down.weight.to("cpu").to(torch.float32))
 
     torch.save(weights, path)
 
@@ -893,7 +816,13 @@ def monkeypatch_or_replace_lora_extended(
     for _module, name, _child_module in _find_modules(
         model,
         target_replace_module,
-        search_class=[nn.Linear, LoraInjectedLinear, nn.Conv2d, LoraInjectedConv2d, LoraInjectedConv3d],
+        search_class=[
+            nn.Linear, 
+            LoraInjectedLinear, 
+            nn.Conv2d, 
+            LoraInjectedConv2d, 
+            LoraInjectedConv3d
+        ],
     ):
 
         if (_child_module.__class__ == nn.Linear) or (
@@ -951,6 +880,35 @@ def monkeypatch_or_replace_lora_extended(
             if bias is not None:
                 _tmp.conv.bias = bias
 
+        elif _child_module.__class__ == nn.Conv3d or(
+            _child_module.__class__ == LoraInjectedConv3d
+        ):
+
+            if len(loras[0].shape) != 5:
+                continue
+
+            _source = (
+                _child_module.conv
+                if isinstance(_child_module, LoraInjectedConv3d)
+                else _child_module
+            )
+
+            weight = _source.weight
+            bias = _source.bias
+            _tmp = LoraInjectedConv3d(
+                _source.in_channels,
+                _source.out_channels,
+                bias=_source.bias is not None,
+                kernel_size=_source.kernel_size,
+                padding=_source.padding,
+                r=r.pop(0) if isinstance(r, list) else r,
+            )
+
+            _tmp.conv.weight = weight
+
+            if bias is not None:
+                _tmp.conv.bias = bias
+
         # switch the module
         _module._modules[name] = _tmp
 
@@ -1000,20 +958,35 @@ def monkeypatch_remove_lora(model):
             _source = _child_module.conv
             weight, bias = _source.weight, _source.bias
 
-            _tmp = nn.Conv2d(
-                in_channels=_source.in_channels,
-                out_channels=_source.out_channels,
+            if isinstance(_source, nn.Conv2d):
+                _tmp = nn.Conv2d(
+                    in_channels=_source.in_channels,
+                    out_channels=_source.out_channels,
+                    kernel_size=_source.kernel_size,
+                    stride=_source.stride,
+                    padding=_source.padding,
+                    dilation=_source.dilation,
+                    groups=_source.groups,
+                    bias=bias is not None,
+                )
+
+                _tmp.weight = weight
+                if bias is not None:
+                    _tmp.bias = bias
+            
+            if isinstance(_source, nn.Conv3d):
+                _tmp = nn.Conv3d(
+                _source.in_channels,
+                _source.out_channels,
+                bias=_source.bias is not None,
                 kernel_size=_source.kernel_size,
-                stride=_source.stride,
                 padding=_source.padding,
-                dilation=_source.dilation,
-                groups=_source.groups,
-                bias=bias is not None,
             )
 
-            _tmp.weight = weight
+            _tmp.conv.weight = weight
+
             if bias is not None:
-                _tmp.bias = bias
+                _tmp.conv.bias = bias    
 
         _module._modules[name] = _tmp
 
@@ -1243,7 +1216,6 @@ def save_all(
 
         # save text encoder
         if save_lora:
-
             save_lora_weight(
                 unet, save_path, target_replace_module=target_replace_module_unet
             )
