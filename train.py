@@ -210,14 +210,15 @@ def inject_lora(use_lora, model, replace_modules, is_extended=False, rank: int =
         
     return params, negation
 
-def handle_lora_save(use_unet_lora, use_text_lora, model):
-    if use_unet_lora:
-        collapse_lora(model.unet)
-        monkeypatch_remove_lora(model.unet)
-        
-    if use_text_lora:
-        collapse_lora(model.text_encoder)
-        monkeypatch_remove_lora(model.text_encoder)
+def handle_lora_save(use_unet_lora, use_text_lora, model, end_train=False):
+    if end_train:
+        if use_unet_lora:
+            collapse_lora(model.unet)
+            monkeypatch_remove_lora(model.unet)
+            
+        if use_text_lora:
+            collapse_lora(model.text_encoder)
+            monkeypatch_remove_lora(model.text_encoder)
 
 def param_optim(model, condition, extra_params=None, is_lora=False, negation=None):
     return {
