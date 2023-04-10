@@ -220,13 +220,12 @@ def handle_lora_save(use_unet_lora, use_text_lora, model, end_train=False):
             collapse_lora(model.text_encoder)
             monkeypatch_remove_lora(model.text_encoder)
 
-def param_optim(model, condition, extra_params=None, is_lora=False, negation=None):
+def param_optim(model, condition, extra_params=None, is_lora=False):
     return {
         "model": model, 
         "condition": condition, 
         'extra_params': extra_params,
-        'is_lora': is_lora,
-        "negation": negation
+        'is_lora': is_lora
     }
     
 
@@ -243,14 +242,8 @@ def create_optim_params(name='param', params=None, lr=5e-6, extra_params=None):
     
     return params
 
-def negate_params(name, negation):
-    # We have to do this if we are co-training with LoRA.
-    # This ensures that parameter groups aren't duplicated.
-    if negation is None: return False
-    for n in negation:
-        if n in name and 'temp' not in name:
-            return True
-    return False
+def negate_params(name):
+    return 'lora' in name
 
 
 def create_optimizer_params(model_list, lr):
@@ -271,7 +264,7 @@ def create_optimizer_params(model_list, lr):
         # If this is true, we can train it.
         if condition:
             for n, p in model.named_parameters():
-                should_negate = negate_params(n, negation)
+                should_negate = negate_params(n)
                 if should_negate: continue
 
                 params = create_optim_params(n, p, lr, extra_params)
@@ -539,22 +532,20 @@ def main(
     optimizer_cls = get_optimizer(use_8bit_adam)
 
     # Use LoRA if enabled.    
-    unet_lora_params, unet_negation = inject_lora(
+    unet_lora_params, _ = inject_lora(
         use_unet_lora, unet, unet_lora_modules, is_extended=True,
         rank=lora_rank
         )
 
-    text_encoder_lora_params, text_encoder_negation = inject_lora(
+    text_encoder_lora_params, _ = inject_lora(
         use_text_lora, text_encoder, text_encoder_lora_modules,
         rank=lora_rank
         )
 
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
     optim_params = [
-        param_optim(unet, trainable_modules is not None, extra_params=extra_unet_params, negation=unet_negation),
-        param_optim(text_encoder, train_text_encoder and not use_text_lora, extra_params=extra_text_encoder_params, 
-                    negation=text_encoder_negation
-                   ),
+        param_optim(unet, trainable_modules is not None, extra_params=extra_unet_params),
+        param_optim(text_encoder, train_text_encoder and not use_text_lora, extra_params=extra_text_encoder_params),
         param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, extra_params={"lr": 5e-5}),
         param_optim(unet_lora_params, use_unet_lora, is_lora=True, extra_params={"lr": 5e-6})
     ]
@@ -681,8 +672,7 @@ def main(
             handle_trainable_modules(
                 unet, 
                 trainable_modules, 
-                is_enabled=True,
-                negation=unet_negation
+                is_enabled=True
             )
 
         # Convert videos to latent space
@@ -718,8 +708,7 @@ def main(
             if global_step == 0 and train_text_encoder:
                 handle_trainable_modules(
                     text_encoder, 
-                    trainable_modules=trainable_text_modules,
-                    negation=text_encoder_negation
+                    trainable_modules=trainable_text_modules
             )
             cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
                 
