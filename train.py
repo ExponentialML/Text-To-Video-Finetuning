@@ -40,7 +40,7 @@ from utils.dataset import VideoJsonDataset, SingleVideoDataset, \
     ImageDataset, VideoFolderDataset, CachedDataset
 from einops import rearrange, repeat
 
-from lora_diffusion import (
+from utils.lora import (
     extract_lora_ups_down,
     inject_trainable_lora,
     inject_trainable_lora_extended,
@@ -271,7 +271,7 @@ def create_optimizer_params(model_list, lr):
         # If this is true, we can train it.
         if condition:
             for n, p in model.named_parameters():
-                should_negate = negate_params(n, negation)
+                should_negate = 'lora' in n
                 if should_negate: continue
 
                 params = create_optim_params(n, p, lr, extra_params)
@@ -403,11 +403,6 @@ def should_sample(global_step, validation_steps, validation_data):
     return (global_step % validation_steps == 0 or global_step == 1)  \
     and validation_data.sample_preview
 
-def replace_prompt(prompt, token, wlist):
-    for w in wlist:
-        if w in prompt: return prompt.replace(w, token)
-    return prompt 
-
 def save_pipe(
         path, 
         global_step,
@@ -418,6 +413,8 @@ def save_pipe(
         output_dir,
         use_unet_lora,
         use_text_lora,
+        unet_target_replace_module=None,
+        text_target_replace_module=None,
         is_checkpoint=False
     ):
 
@@ -440,7 +437,16 @@ def save_pipe(
         vae=vae,
     )
     
-    handle_lora_save(use_unet_lora, use_text_lora, pipeline, end_train=not is_checkpoint)
+    handle_lora_save(
+        use_unet_lora, use_text_lora, 
+        pipeline, 
+        output_dir,
+        global_step,
+        unet_target_replace_module,
+        text_target_replace_module,
+        end_train=not is_checkpoint
+    )
+
     pipeline.save_pretrained(save_path)
     
     if is_checkpoint:
@@ -451,6 +457,49 @@ def save_pipe(
     
     del pipeline
     torch.cuda.empty_cache()
+    gc.collect()
+
+
+def replace_prompt(prompt, token, wlist):
+    for w in wlist:
+        if w in prompt: return prompt.replace(w, token)
+    return prompt 
+
+def handle_lora_save(
+        use_unet_lora, 
+        use_text_lora, 
+        model, 
+        save_path,
+        checkpoint_step,
+        unet_target_replace_module=None,
+        text_target_replace_module=None,
+        end_train=False
+    ):
+    if end_train:
+        if use_unet_lora:
+            collapse_lora(model.unet)
+            monkeypatch_remove_lora(model.unet)
+            
+        if use_text_lora:
+            collapse_lora(model.text_encoder)
+            monkeypatch_remove_lora(model.text_encoder)
+    
+    if not end_train:
+        save_path = f"{save_path}/lora"
+        os.makedirs(save_path, exist_ok=True)
+        
+        if use_unet_lora and unet_target_replace_module is not None:
+            save_lora_weight(
+                model.unet, 
+                f"{save_path}/{checkpoint_step}_unet.pt", 
+                unet_target_replace_module
+            )
+        if use_text_lora and text_target_replace_module is not None:
+            save_lora_weight(
+                model.text_encoder, 
+                f"{save_path}/{checkpoint_step}_text_encoder.pt", 
+                text_target_replace_module
+            )
 
 def main(
     pretrained_model_path: str,
@@ -836,6 +885,8 @@ def main(
                         output_dir, 
                         use_unet_lora, 
                         use_text_lora,
+                        unet_target_replace_module=unet_lora_modules,
+                        text_target_replace_module=text_encoder_lora_modules,
                         is_checkpoint=True
                     )
 
