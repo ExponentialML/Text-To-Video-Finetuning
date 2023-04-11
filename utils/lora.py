@@ -519,7 +519,7 @@ def save_lora_weight(
     model,
     path="./lora.pt",
     target_replace_module=DEFAULT_TARGET_REPLACE,
-):
+):  
     weights = []
     for _up, _down in extract_lora_ups_down(
         model, target_replace_module=target_replace_module
@@ -990,7 +990,6 @@ def monkeypatch_remove_lora(model):
         _module._modules[name] = _tmp
 
 
-
 def monkeypatch_add_lora(
     model,
     loras,
@@ -1165,6 +1164,18 @@ def patch_pipe(
             )
         return tok_dict
 
+
+def train_patch_pipe(pipe, patch_unet, patch_text):
+    if patch_unet:
+        print("LoRA : Patching Unet")
+        collapse_lora(pipe.unet)
+        monkeypatch_remove_lora(pipe.unet)
+
+    if patch_text:
+        print("LoRA : Patching text encoder")
+
+        collapse_lora(pipe.text_encoder)
+        monkeypatch_remove_lora(pipe.text_encoder)
 
 @torch.no_grad()
 def inspect_lora(model):
