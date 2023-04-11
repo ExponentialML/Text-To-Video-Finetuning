@@ -116,7 +116,7 @@ def inference(
 ):
     with torch.autocast(device, dtype=torch.half):
         pipeline = initialize_pipeline(model, device, xformers, sdp)
-        inject_inferable_lora(pipeline, lora_path, lora_rank)
+        inject_inferable_lora(pipeline, lora_path, r=lora_rank)
         prompt = [prompt] * batch_size
         negative_prompt = ([negative_prompt] * batch_size) if negative_prompt is not None else None
 

@@ -1,6 +1,7 @@
 import json
 import math
 from itertools import groupby
+import os
 from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union
 
 import numpy as np
@@ -485,34 +486,34 @@ def inject_inferable_lora(
     from transformers.models.clip import CLIPTextModel
     from diffusers import UNet3DConditionModel
 
-    def is_text_model(f): return 'text_encoder' in f and isinstance(model, CLIPTextModel)
-    def is_unet(f): return 'unet' in f and isinstance(model, UNet3DConditionModel)
+    def is_text_model(f): return 'text_encoder' in f and isinstance(model.text_encoder, CLIPTextModel)
+    def is_unet(f): return 'unet' in f and model.unet.__class__.__name__ == "UNet3DConditionModel"
 
     if os.path.exists(lora_path):
         try:
             for f in os.listdir(lora_path):
                 if f.endswith('.pt'):
                     lora_file = os.path.join(lora_path, f)
-                    
+
                     if is_text_model(f):
                         monkeypatch_or_replace_lora(
-                            model,
+                            model.text_encoder,
                             torch.load(lora_file),
                             target_replace_module=unet_replace_modules,
                             r=r
                         )
                         print("Successfully loaded Text Encoder LoRa.")
-                        return
-                        
+                        continue
+
                     if is_unet(f):
                         monkeypatch_or_replace_lora_extended(
-                            model,
+                            model.unet,
                             torch.load(lora_file),
                             target_replace_module=text_encoder_replace_modules,
                             r=r
                         )
                         print("Successfully loaded UNET LoRa.")
-                        return
+                        continue
 
                     print("Found a .pt file, but doesn't have the correct name format. (unet.pt, text_encoder.pt)")
 
