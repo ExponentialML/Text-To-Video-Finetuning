@@ -180,7 +180,7 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_t
     except:
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
-def inject_lora(use_lora, model, replace_modules, is_extended=False, dropout=0.0, lora_path='', r=128):    
+def inject_lora(use_lora, model, replace_modules, is_extended=False, dropout=0.0, lora_path='', r=16):    
     injector = (
         inject_trainable_lora if not is_extended 
     else 
@@ -223,7 +223,7 @@ def inject_lora(use_lora, model, replace_modules, is_extended=False, dropout=0.0
         injector_args = {
             "model": model, 
             "target_replace_module": REPLACE_MODULES,
-            "r": 128
+            "r": r
         }
         if not is_extended: injector_args['dropout_p'] = dropout
 
