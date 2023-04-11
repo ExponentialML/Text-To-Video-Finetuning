@@ -816,7 +816,7 @@ def monkeypatch_or_replace_lora_extended(
     for _module, name, _child_module in _find_modules(
         model,
         target_replace_module,
-        search_class=search_class=[
+        search_class=[
             nn.Linear, 
             nn.Conv2d, 
             nn.Conv3d,
