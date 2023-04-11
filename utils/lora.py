@@ -816,12 +816,13 @@ def monkeypatch_or_replace_lora_extended(
     for _module, name, _child_module in _find_modules(
         model,
         target_replace_module,
-        search_class=[
+        search_class=search_class=[
             nn.Linear, 
-            LoraInjectedLinear, 
             nn.Conv2d, 
+            nn.Conv3d,
+            LoraInjectedLinear, 
             LoraInjectedConv2d, 
-            LoraInjectedConv3d
+            LoraInjectedConv3d,
         ],
     ):
 
