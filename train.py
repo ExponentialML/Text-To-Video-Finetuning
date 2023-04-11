@@ -525,42 +525,6 @@ def replace_prompt(prompt, token, wlist):
         if w in prompt: return prompt.replace(w, token)
     return prompt 
 
-def handle_lora_save(
-        use_unet_lora, 
-        use_text_lora, 
-        model, 
-        save_path,
-        checkpoint_step,
-        unet_target_replace_module=None,
-        text_target_replace_module=None,
-        end_train=False
-    ):
-    if end_train:
-        if use_unet_lora:
-            collapse_lora(model.unet)
-            monkeypatch_remove_lora(model.unet)
-            
-        if use_text_lora:
-            collapse_lora(model.text_encoder)
-            monkeypatch_remove_lora(model.text_encoder)
-    
-    if not end_train:
-        save_path = f"{save_path}/lora"
-        os.makedirs(save_path, exist_ok=True)
-        
-        if use_unet_lora and unet_target_replace_module is not None:
-            save_lora_weight(
-                model.unet, 
-                f"{save_path}/{checkpoint_step}_unet.pt", 
-                unet_target_replace_module
-            )
-        if use_text_lora and text_target_replace_module is not None:
-            save_lora_weight(
-                model.text_encoder, 
-                f"{save_path}/{checkpoint_step}_text_encoder.pt", 
-                text_target_replace_module
-            )
-
 def main(
     pretrained_model_path: str,
     output_dir: str,
