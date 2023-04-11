@@ -3,7 +3,7 @@ import os
 import warnings
 from pathlib import Path
 from uuid import uuid4
-
+from utils.lora import inject_inferable_lora
 import torch
 from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
 from einops import rearrange
@@ -111,10 +111,12 @@ def inference(
     device="cuda",
     xformers=False,
     sdp=False,
+    lora_path='',
+    lora_rank=64
 ):
     with torch.autocast(device, dtype=torch.half):
         pipeline = initialize_pipeline(model, device, xformers, sdp)
-
+        inject_inferable_lora(pipeline, lora_path, r=lora_rank)
         prompt = [prompt] * batch_size
         negative_prompt = ([negative_prompt] * batch_size) if negative_prompt is not None else None
 
@@ -168,6 +170,8 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--device", type=str, default="cuda")
     parser.add_argument("-x", "--xformers", action="store_true")
     parser.add_argument("-S", "--sdp", action="store_true")
+    parser.add_argument("-lP", "--lora_path", type=str, default="")
+    parser.add_argument("-lR", "--lora_rank", type=int, default=64)
     parser.add_argument("-rw", "--remove-watermark", action="store_true")
     args = vars(parser.parse_args())
 
