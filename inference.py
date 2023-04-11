@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 from utils.lora import inject_inferable_lora
 import torch
-from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
+from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline, UNet3DConditionModel
 from einops import rearrange
 from torch.nn.functional import interpolate
 
@@ -17,8 +17,10 @@ def initialize_pipeline(model, device="cuda", xformers=False, sdp=False):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
 
-        scheduler, tokenizer, text_encoder, vae, unet = load_primary_models(model)
-
+        scheduler, tokenizer, text_encoder, vae, _unet = load_primary_models(model)
+        del _unet #This is a no op
+        unet = UNet3DConditionModel.from_pretrained(model, subfolder='unet')
+    
     pipeline = TextToVideoSDPipeline.from_pretrained(
         pretrained_model_name_or_path=model,
         scheduler=scheduler,
