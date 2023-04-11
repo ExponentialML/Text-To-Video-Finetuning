@@ -479,7 +479,7 @@ def inject_inferable_lora(
         model, 
         lora_path='', 
         unet_replace_modules=["UNet3DConditionModel"], 
-        text_encoder_replace_modules=["CLIPTextModel"],
+        text_encoder_replace_modules=["CLIPEncoderLayer"],
         is_extended=False, 
         r=16
     ):    
@@ -499,7 +499,7 @@ def inject_inferable_lora(
                         monkeypatch_or_replace_lora(
                             model.text_encoder,
                             torch.load(lora_file),
-                            target_replace_module=unet_replace_modules,
+                            target_replace_module=text_encoder_replace_modules,
                             r=r
                         )
                         print("Successfully loaded Text Encoder LoRa.")
@@ -509,7 +509,7 @@ def inject_inferable_lora(
                         monkeypatch_or_replace_lora_extended(
                             model.unet,
                             torch.load(lora_file),
-                            target_replace_module=text_encoder_replace_modules,
+                            target_replace_module=unet_replace_modules,
                             r=r
                         )
                         print("Successfully loaded UNET LoRa.")
