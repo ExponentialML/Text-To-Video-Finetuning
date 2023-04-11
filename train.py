@@ -6,6 +6,7 @@ import math
 import os
 import random
 import gc
+import copy
 
 from typing import Dict, Optional, Tuple
 from omegaconf import OmegaConf
@@ -40,15 +41,14 @@ from utils.dataset import VideoJsonDataset, SingleVideoDataset, \
     ImageDataset, VideoFolderDataset, CachedDataset
 from einops import rearrange, repeat
 
-from lora_diffusion import (
+from utils.lora import (
     extract_lora_ups_down,
     inject_trainable_lora,
     inject_trainable_lora_extended,
-    safetensors_available,
     save_lora_weight,
-    save_safeloras,
-    collapse_lora,
-    monkeypatch_remove_lora
+    train_patch_pipe,
+    monkeypatch_or_replace_lora,
+    monkeypatch_or_replace_lora_extended
 )
 
 
@@ -180,7 +180,7 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_t
     except:
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
-def inject_lora(use_lora, model, replace_modules, is_extended=False, rank: int = 16):
+def inject_lora(use_lora, model, replace_modules, is_extended=False, dropout=0.0, lora_path='', r=16):    
     injector = (
         inject_trainable_lora if not is_extended 
     else 
@@ -190,15 +190,44 @@ def inject_lora(use_lora, model, replace_modules, is_extended=False, rank: int =
     params = None
     negation = None
 
+    if os.path.exists(lora_path):
+        try:
+            for f in os.listdir(lora_path):
+                if f.endswith('.pt'):
+                    lora_file = os.path.join(lora_path, f)
+                    
+                    if 'text_encoder' in f and isinstance(model, CLIPTextModel):
+                        monkeypatch_or_replace_lora(
+                            model,
+                            torch.load(lora_file),
+                            target_replace_module=replace_modules,
+                            r=r
+                        )
+                        print("Successfully loaded Text Encoder LoRa.")
+
+                    if 'unet' in f and isinstance(model, UNet3DConditionModel):
+                        monkeypatch_or_replace_lora_extended(
+                            model,
+                            torch.load(lora_file),
+                            target_replace_module=replace_modules,
+                            r=r
+                        )
+                        print("Successfully loaded UNET LoRa.")
+
+        except Exception as e:
+            print(e)
+            print("Could not load LoRAs. Injecting new ones instead...")
+
     if use_lora:
         REPLACE_MODULES = replace_modules
+        injector_args = {
+            "model": model, 
+            "target_replace_module": REPLACE_MODULES,
+            "r": r
+        }
+        if not is_extended: injector_args['dropout_p'] = dropout
 
-        params, negation = injector(
-            model,
-            target_replace_module=REPLACE_MODULES,
-            r=rank
-        )   
-         
+        params, negation = injector(**injector_args)   
         for _up, _down in extract_lora_ups_down(
             model, 
             target_replace_module=REPLACE_MODULES):
@@ -210,15 +239,42 @@ def inject_lora(use_lora, model, replace_modules, is_extended=False, rank: int =
         
     return params, negation
 
-def handle_lora_save(use_unet_lora, use_text_lora, model, end_train=False):
-    if end_train:
-        if use_unet_lora:
-            collapse_lora(model.unet)
-            monkeypatch_remove_lora(model.unet)
-            
-        if use_text_lora:
-            collapse_lora(model.text_encoder)
-            monkeypatch_remove_lora(model.text_encoder)
+def save_lora(model, name, condition, replace_modules, step, save_path): 
+    if condition and replace_modules is not None:
+        save_path = f"{save_path}/{step}_{name}.pt"
+        save_lora_weight(model, save_path, replace_modules)
+
+def handle_lora_save(
+    use_unet_lora, 
+    use_text_lora, 
+    model, 
+    save_path, 
+    checkpoint_step, 
+    unet_target_modules, 
+    text_encoder_target_modules
+):
+    
+    save_path = f"{save_path}/lora"
+    os.makedirs(save_path, exist_ok=True)
+
+    save_lora(
+        model.unet, 
+        'unet', 
+        use_unet_lora, 
+        unet_target_modules, 
+        checkpoint_step,
+        save_path, 
+    )
+    save_lora(
+        model.text_encoder, 
+        'text_encoder', 
+        use_text_lora, 
+        text_encoder_target_modules, 
+        checkpoint_step, 
+        save_path
+    )
+
+    train_patch_pipe(model, use_unet_lora, use_text_lora)
 
 def param_optim(model, condition, extra_params=None, is_lora=False, negation=None):
     return {
@@ -271,7 +327,7 @@ def create_optimizer_params(model_list, lr):
         # If this is true, we can train it.
         if condition:
             for n, p in model.named_parameters():
-                should_negate = negate_params(n, negation)
+                should_negate = 'lora' in n
                 if should_negate: continue
 
                 params = create_optim_params(n, p, lr, extra_params)
@@ -403,11 +459,6 @@ def should_sample(global_step, validation_steps, validation_data):
     return (global_step % validation_steps == 0 or global_step == 1)  \
     and validation_data.sample_preview
 
-def replace_prompt(prompt, token, wlist):
-    for w in wlist:
-        if w in prompt: return prompt.replace(w, token)
-    return prompt 
-
 def save_pipe(
         path, 
         global_step,
@@ -418,7 +469,9 @@ def save_pipe(
         output_dir,
         use_unet_lora,
         use_text_lora,
-        is_checkpoint=False
+        unet_target_replace_module=None,
+        text_target_replace_module=None,
+        is_checkpoint=False,
     ):
 
     if is_checkpoint:
@@ -430,27 +483,83 @@ def save_pipe(
     # Save the dtypes so we can continue training at the same precision.
     u_dtype, t_dtype, v_dtype = unet.dtype, text_encoder.dtype, vae.dtype 
 
-    # We do this to prevent OOM during training when saving a checkpoint.
-    [x.to('cpu') for x in [unet, text_encoder, vae]]
+   # Copy the model without creating a reference to it. This allows keeping the state of our lora training if enabled.
+    unet_out = copy.deepcopy(accelerator.unwrap_model(unet, keep_fp32_wrapper=False))
+    text_encoder_out = copy.deepcopy(accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=False))
 
     pipeline = TextToVideoSDPipeline.from_pretrained(
         path,
-        unet=unet,
-        text_encoder=text_encoder,
+        unet=unet_out,
+        text_encoder=text_encoder_out,
         vae=vae,
-    )
+    ).to(torch_dtype=torch.float16)
     
-    handle_lora_save(use_unet_lora, use_text_lora, pipeline, end_train=not is_checkpoint)
+    handle_lora_save(
+        use_unet_lora, 
+        use_text_lora, 
+        pipeline, 
+        output_dir, 
+        global_step,
+        unet_target_replace_module, 
+        text_target_replace_module
+    )
+
     pipeline.save_pretrained(save_path)
     
     if is_checkpoint:
+        unet, text_encoder = accelerator.prepare(unet, text_encoder)
         models_to_cast_back = [(unet, u_dtype), (text_encoder, t_dtype), (vae, v_dtype)]
         [x[0].to(accelerator.device, dtype=x[1]) for x in models_to_cast_back]
 
     logger.info(f"Saved model at {save_path} on step {global_step}")
     
     del pipeline
+    del unet_out
+    del text_encoder_out
     torch.cuda.empty_cache()
+    gc.collect()
+
+
+def replace_prompt(prompt, token, wlist):
+    for w in wlist:
+        if w in prompt: return prompt.replace(w, token)
+    return prompt 
+
+def handle_lora_save(
+        use_unet_lora, 
+        use_text_lora, 
+        model, 
+        save_path,
+        checkpoint_step,
+        unet_target_replace_module=None,
+        text_target_replace_module=None,
+        end_train=False
+    ):
+    if end_train:
+        if use_unet_lora:
+            collapse_lora(model.unet)
+            monkeypatch_remove_lora(model.unet)
+            
+        if use_text_lora:
+            collapse_lora(model.text_encoder)
+            monkeypatch_remove_lora(model.text_encoder)
+    
+    if not end_train:
+        save_path = f"{save_path}/lora"
+        os.makedirs(save_path, exist_ok=True)
+        
+        if use_unet_lora and unet_target_replace_module is not None:
+            save_lora_weight(
+                model.unet, 
+                f"{save_path}/{checkpoint_step}_unet.pt", 
+                unet_target_replace_module
+            )
+        if use_text_lora and text_target_replace_module is not None:
+            save_lora_weight(
+                model.text_encoder, 
+                f"{save_path}/{checkpoint_step}_text_encoder.pt", 
+                text_target_replace_module
+            )
 
 def main(
     pretrained_model_path: str,
@@ -495,6 +604,7 @@ def main(
     unet_lora_modules: Tuple[str] = ["ResnetBlock2D"],
     text_encoder_lora_modules: Tuple[str] = ["CLIPEncoderLayer"],
     lora_rank: int = 16,
+    lora_path: str = '',
     **kwargs
 ):
 
@@ -541,12 +651,12 @@ def main(
     # Use LoRA if enabled.    
     unet_lora_params, unet_negation = inject_lora(
         use_unet_lora, unet, unet_lora_modules, is_extended=True,
-        rank=lora_rank
+        r=lora_rank, lora_path=lora_path
         )
 
     text_encoder_lora_params, text_encoder_negation = inject_lora(
         use_text_lora, text_encoder, text_encoder_lora_modules,
-        rank=lora_rank
+        r=lora_rank, lora_path=lora_path
         )
 
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
@@ -555,8 +665,8 @@ def main(
         param_optim(text_encoder, train_text_encoder and not use_text_lora, extra_params=extra_text_encoder_params, 
                     negation=text_encoder_negation
                    ),
-        param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, extra_params={"lr": 5e-5}),
-        param_optim(unet_lora_params, use_unet_lora, is_lora=True, extra_params={"lr": 5e-6})
+        param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, extra_params={"lr": 1e-5}),
+        param_optim(unet_lora_params, use_unet_lora, is_lora=True, extra_params={"lr": 1e-5})
     ]
 
     params = create_optimizer_params(optim_params, learning_rate)
@@ -836,6 +946,8 @@ def main(
                         output_dir, 
                         use_unet_lora, 
                         use_text_lora,
+                        unet_lora_modules,
+                        text_encoder_lora_modules,
                         is_checkpoint=True
                     )
 
@@ -908,8 +1020,10 @@ def main(
                 output_dir, 
                 use_unet_lora, 
                 use_text_lora,
+                unet_lora_modules,
+                text_encoder_lora_modules,
                 is_checkpoint=False
-        )      
+        )     
     accelerator.end_training()
 
 if __name__ == "__main__":
