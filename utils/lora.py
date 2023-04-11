@@ -474,6 +474,52 @@ def inject_trainable_lora_extended(
     return require_grad_params, names
 
 
+def inject_inferable_lora(
+        model, 
+        lora_path='', 
+        unet_replace_modules=["UNet3DConditionModel"], 
+        text_encoder_replace_modules=["CLIPTextModel"],
+        is_extended=False, 
+        r=16
+    ):    
+    from transformers.models.clip import CLIPTextModel
+    from diffusers import UNet3DConditionModel
+
+    def is_text_model(f): return 'text_encoder' in f and isinstance(model, CLIPTextModel)
+    def is_unet(f): return 'unet' in f and isinstance(model, UNet3DConditionModel)
+
+    if os.path.exists(lora_path):
+        try:
+            for f in os.listdir(lora_path):
+                if f.endswith('.pt'):
+                    lora_file = os.path.join(lora_path, f)
+                    
+                    if is_text_model(f):
+                        monkeypatch_or_replace_lora(
+                            model,
+                            torch.load(lora_file),
+                            target_replace_module=unet_replace_modules,
+                            r=r
+                        )
+                        print("Successfully loaded Text Encoder LoRa.")
+                        return
+                        
+                    if is_unet(f):
+                        monkeypatch_or_replace_lora_extended(
+                            model,
+                            torch.load(lora_file),
+                            target_replace_module=text_encoder_replace_modules,
+                            r=r
+                        )
+                        print("Successfully loaded UNET LoRa.")
+                        return
+
+                    print("Found a .pt file, but doesn't have the correct name format. (unet.pt, text_encoder.pt)")
+
+        except Exception as e:
+            print(e)
+            print("Couldn't inject LoRA's due to an error.")
+
 def extract_lora_ups_down(model, target_replace_module=DEFAULT_TARGET_REPLACE):
 
     loras = []
