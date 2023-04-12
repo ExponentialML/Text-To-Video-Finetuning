@@ -220,7 +220,10 @@ class VideoJsonDataset(Dataset):
 
          # Assign train data
         train_data = self.train_data[index]
-
+        
+        # Get the frame of the current index.
+        self.sample_start_idx = train_data['frame_index']
+        
         # Initialize resize
         resize = None
 
