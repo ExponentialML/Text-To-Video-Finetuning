@@ -130,13 +130,13 @@ class VideoJsonDataset(Dataset):
         return json_data
 
     def build_json_dict(self, data, nested_data, extended_data):
-        clip_path = 'clip_path' if 'clip_path' in nested_data else None
-
+        clip_path = nested_data['clip_path'] if 'clip_path' in nested_data else None
+        
         extended_data.append({
             self.vid_data_key: data[self.vid_data_key],
             'frame_index': nested_data['frame_index'],
             'prompt': nested_data['prompt'],
-            'clip_path': nested_data['clip_path']
+            'clip_path': clip_path
         })
         
     def load_from_json(self, path, json_data):
@@ -202,7 +202,8 @@ class VideoJsonDataset(Dataset):
     def train_data_batch(self, index):
 
         # If we are training on individual clips.
-        if 'clip_path' in self.train_data[index]:
+        if 'clip_path' in self.train_data[index] and \
+            self.train_data[index]['clip_path'] is not None:
 
             vid_data = self.train_data[index]
 
