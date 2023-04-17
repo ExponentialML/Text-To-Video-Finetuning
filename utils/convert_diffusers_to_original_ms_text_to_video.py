@@ -424,10 +424,10 @@ if __name__ == "__main__":
         # Need to add the tag 'transformer' in advance so we can knock it out from the final layer-norm
         text_enc_dict = {"transformer." + k: v for k, v in text_enc_dict.items()}
         text_enc_dict = convert_text_enc_state_dict_v20(text_enc_dict)
-        text_enc_dict = {"cond_stage_model.model." + k: v for k, v in text_enc_dict.items()}
+        #text_enc_dict = {"cond_stage_model.model." + k: v for k, v in text_enc_dict.items()}
     else:
         text_enc_dict = convert_text_enc_state_dict(text_enc_dict)
-        text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
+        #text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
 
     # DON'T PUT TOGETHER FOR THE NEW CHECKPOINT AS MODELSCOPE USES THEM IN THE SPLITTED FORM --kabachuha
     # Save CLIP and the Diffusion model to their own files
