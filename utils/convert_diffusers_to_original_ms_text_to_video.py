@@ -165,7 +165,7 @@ unet_conversion_map_layer.append((sd_mid_atn_prefix, hf_mid_atn_prefix))
 
 for j in range(2):
     hf_mid_res_prefix = f"mid_block.temp_convs.{j}."
-    sd_mid_res_prefix = f"middle_block.{2*j+1}.temopral_conv."
+    sd_mid_res_prefix = f"middle_block.{3*j}.temopral_conv."
     unet_conversion_map_layer.append((sd_mid_res_prefix, hf_mid_res_prefix))
 
 # The pipeline
