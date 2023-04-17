@@ -47,12 +47,17 @@ unet_conversion_map = [
 
 unet_conversion_map_resnet = [
     # (ModelScope, HF Diffusers)
+
+    # SD
     ("in_layers.0", "norm1"),
     ("in_layers.2", "conv1"),
     ("out_layers.0", "norm2"),
     ("out_layers.3", "conv2"),
     ("emb_layers.1", "time_emb_proj"),
     ("skip_connection", "conv_shortcut"),
+
+    # MS
+    ("temopral_conv", "temp_conv"), # ROFL, they have a typo here --kabachuha
 ]
 
 unet_conversion_map_layer = []
@@ -85,6 +90,8 @@ for i in range(4):
 
     for j in range(2):
         # loop over resnets/attentions for downblocks
+
+        # Spacial SD stuff
         hf_down_res_prefix = f"down_blocks.{i}.resnets.{j}."
         sd_down_res_prefix = f"input_blocks.{3*i + j + 1}.0."
         unet_conversion_map_layer.append((sd_down_res_prefix, hf_down_res_prefix))
@@ -94,9 +101,22 @@ for i in range(4):
             hf_down_atn_prefix = f"down_blocks.{i}.attentions.{j}."
             sd_down_atn_prefix = f"input_blocks.{3*i + j + 1}.1."
             unet_conversion_map_layer.append((sd_down_atn_prefix, hf_down_atn_prefix))
+        
+        # Temporal MS stuff
+        hf_down_res_prefix = f"down_blocks.{i}.temp_convs.{j}."
+        sd_down_res_prefix = f"input_blocks.{3*i + j + 1}.0."
+        unet_conversion_map_layer.append((sd_down_res_prefix, hf_down_res_prefix))
+
+        if i < 3:
+            # no attention layers in down_blocks.3
+            hf_down_atn_prefix = f"down_blocks.{i}.temp_attentions.{j}."
+            sd_down_atn_prefix = f"input_blocks.{3*i + j + 1}.1."
+            unet_conversion_map_layer.append((sd_down_atn_prefix, hf_down_atn_prefix))
 
     for j in range(3):
         # loop over resnets/attentions for upblocks
+
+        # Spacial SD stuff
         hf_up_res_prefix = f"up_blocks.{i}.resnets.{j}."
         sd_up_res_prefix = f"output_blocks.{3*i + j}.0."
         unet_conversion_map_layer.append((sd_up_res_prefix, hf_up_res_prefix))
@@ -106,7 +126,19 @@ for i in range(4):
             hf_up_atn_prefix = f"up_blocks.{i}.attentions.{j}."
             sd_up_atn_prefix = f"output_blocks.{3*i + j}.1."
             unet_conversion_map_layer.append((sd_up_atn_prefix, hf_up_atn_prefix))
+        
+        # loop over resnets/attentions for upblocks
+        hf_up_res_prefix = f"up_blocks.{i}.temp_convs.{j}."
+        sd_up_res_prefix = f"output_blocks.{3*i + j}.0."
+        unet_conversion_map_layer.append((sd_up_res_prefix, hf_up_res_prefix))
 
+        if i > 0:
+            # no attention layers in up_blocks.0
+            hf_up_atn_prefix = f"up_blocks.{i}.temp_attentions.{j}."
+            sd_up_atn_prefix = f"output_blocks.{3*i + j}.1."
+            unet_conversion_map_layer.append((sd_up_atn_prefix, hf_up_atn_prefix))
+
+    # Up/Downsamplers are 2D, so don't need to touch them
     if i < 3:
         # no downsample in down_blocks.3
         hf_downsample_prefix = f"down_blocks.{i}.downsamplers.0.conv."
@@ -121,6 +153,7 @@ for i in range(4):
 
 # Handle the middle block
 
+# Spacial
 hf_mid_atn_prefix = "mid_block.attentions.0."
 sd_mid_atn_prefix = "middle_block.1."
 unet_conversion_map_layer.append((sd_mid_atn_prefix, hf_mid_atn_prefix))
@@ -130,8 +163,17 @@ for j in range(2):
     sd_mid_res_prefix = f"middle_block.{2*j}."
     unet_conversion_map_layer.append((sd_mid_res_prefix, hf_mid_res_prefix))
 
+# Temporal
+hf_mid_atn_prefix = "mid_block.temp_attentions.0."
+sd_mid_atn_prefix = "middle_block.1."
+unet_conversion_map_layer.append((sd_mid_atn_prefix, hf_mid_atn_prefix))
 
+for j in range(2):
+    hf_mid_res_prefix = f"mid_block.temp_convs.{j}."
+    sd_mid_res_prefix = f"middle_block.{2*j}."
+    unet_conversion_map_layer.append((sd_mid_res_prefix, hf_mid_res_prefix))
 
+# The pipeline
 def convert_unet_state_dict(unet_state_dict):
     print ('Converting the UNET')
     # buyer beware: this is a *brittle* function,
@@ -143,6 +185,10 @@ def convert_unet_state_dict(unet_state_dict):
         mapping[hf_name] = sd_name
     for k, v in mapping.items():
         if "resnets" in k:
+            for sd_part, hf_part in unet_conversion_map_resnet:
+                v = v.replace(hf_part, sd_part)
+            mapping[k] = v
+        elif "temp_convs" in k:
             for sd_part, hf_part in unet_conversion_map_resnet:
                 v = v.replace(hf_part, sd_part)
             mapping[k] = v
@@ -326,7 +372,7 @@ if __name__ == "__main__":
 
     # Path for safetensors
     unet_path = osp.join(args.model_path, "unet", "diffusion_pytorch_model.safetensors")
-    vae_path = osp.join(args.model_path, "vae", "diffusion_pytorch_model.safetensors")
+    #vae_path = osp.join(args.model_path, "vae", "diffusion_pytorch_model.safetensors")
     text_enc_path = osp.join(args.model_path, "text_encoder", "model.safetensors")
 
     # Load models from safetensors if it exists, if it doesn't pytorch
@@ -336,11 +382,11 @@ if __name__ == "__main__":
         unet_path = osp.join(args.model_path, "unet", "diffusion_pytorch_model.bin")
         unet_state_dict = torch.load(unet_path, map_location="cpu")
 
-    if osp.exists(vae_path):
-        vae_state_dict = load_file(vae_path, device="cpu")
-    else:
-        vae_path = osp.join(args.model_path, "vae", "diffusion_pytorch_model.bin")
-        vae_state_dict = torch.load(vae_path, map_location="cpu")
+    # if osp.exists(vae_path):
+    #     vae_state_dict = load_file(vae_path, device="cpu")
+    # else:
+    #     vae_path = osp.join(args.model_path, "vae", "diffusion_pytorch_model.bin")
+    #     vae_state_dict = torch.load(vae_path, map_location="cpu")
 
     if osp.exists(text_enc_path):
         text_enc_dict = load_file(text_enc_path, device="cpu")
