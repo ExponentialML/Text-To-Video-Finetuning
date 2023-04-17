@@ -310,6 +310,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--model_path", default=None, type=str, required=True, help="Path to the model to convert.")
     parser.add_argument("--checkpoint_path", default=None, type=str, required=True, help="Path to the output model.")
+    parser.add_argument("--clip_checkpoint_path", default=None, type=str, required=True, help="Path to the output CLIP model.")
     parser.add_argument("--half", action="store_true", help="Save weights in half precision.")
     parser.add_argument(
         "--use_safetensors", action="store_true", help="Save weights use safetensors, default is ckpt."
@@ -320,6 +321,8 @@ if __name__ == "__main__":
     assert args.model_path is not None, "Must provide a model path!"
 
     assert args.checkpoint_path is not None, "Must provide a checkpoint path!"
+
+    assert args.clip_checkpoint_path is not None, "Must provide a CLIP checkpoint path!"
 
     # Path for safetensors
     unet_path = osp.join(args.model_path, "unet", "diffusion_pytorch_model.safetensors")
@@ -369,8 +372,7 @@ if __name__ == "__main__":
         text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
 
     # DON'T PUT TOGETHER FOR THE NEW CHECKPOINT AS MODELSCOPE USES THEM IN THE SPLITTED FORM --kabachuha
-
-
+    # Save CLIP and the Diffusion model to their own files
 
     #state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
     print ('Saving UNET')
@@ -384,3 +386,15 @@ if __name__ == "__main__":
     else:
         state_dict = {"state_dict": state_dict}
         torch.save(state_dict, args.checkpoint_path)
+    
+    print ('Saving CLIP')
+    state_dict = {**text_enc_dict}
+
+    if args.half:
+        state_dict = {k: v.half() for k, v in state_dict.items()}
+
+    if args.use_safetensors:
+        save_file(state_dict, args.checkpoint_path)
+    else:
+        state_dict = {"state_dict": state_dict}
+        torch.save(state_dict, args.clip_checkpoint_path)
