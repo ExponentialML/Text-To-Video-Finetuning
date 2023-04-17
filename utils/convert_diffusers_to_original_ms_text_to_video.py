@@ -24,19 +24,11 @@ unet_conversion_map = [
     ("time_embed.2.weight", "time_embedding.linear_2.weight"),
     ("time_embed.2.bias", "time_embedding.linear_2.bias"),
 
-    # # from Modelscope only
-    # ("label_emb.0.0.weight", "class_embedding.linear_1.weight"),
-    # ("label_emb.0.0.bias", "class_embedding.linear_1.bias"),
-    # ("label_emb.0.2.weight", "class_embedding.linear_2.weight"),
-    # ("label_emb.0.2.bias", "class_embedding.linear_2.bias"),
 
     # from Vanilla ModelScope/StableDiffusion
     ("input_blocks.0.0.weight", "conv_in.weight"),
     ("input_blocks.0.0.bias", "conv_in.bias"),
 
-    # from Modelscope only
-    #("input_blocks.0.1", "transformer_in.weight"),
-    #("input_blocks.0.1.bias", "transformer_in.bias"),
 
     # from Vanilla ModelScope/StableDiffusion
     ("out.0.weight", "conv_norm_out.weight"),
@@ -88,10 +80,10 @@ unet_conversion_map_layer.append(('input_blocks.0.1', 'transformer_in'))
 
 # hardcoded number of downblocks and resnets/attentions...
 # would need smarter logic for other networks.
-for i in range(4):# 4 UD/DOWN BLOCKS CONFIRMED --kabachuha
+for i in range(4):
     # loop over downblocks/upblocks
 
-    for j in range(2): # 2 RESNET BLOCKS CONFIRMED --kabachuha
+    for j in range(2):
         # loop over resnets/attentions for downblocks
 
         # Spacial SD stuff
@@ -183,8 +175,6 @@ def convert_unet_state_dict(unet_state_dict):
     # and correct output requires that all of these pieces interact in
     # the exact order in which I have arranged them.
     mapping = {k: k for k in unet_state_dict.keys()}
-
-
 
     for sd_name, hf_name in unet_conversion_map:
         mapping[hf_name] = sd_name
