@@ -425,7 +425,7 @@ if __name__ == "__main__":
     if args.use_safetensors:
         save_file(state_dict, args.checkpoint_path)
     else:
-        state_dict = {"state_dict": state_dict}
+        #state_dict = {"state_dict": state_dict}
         torch.save(state_dict, args.checkpoint_path)
     
     print ('Saving CLIP')
