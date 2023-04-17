@@ -49,7 +49,7 @@ unet_conversion_map_resnet = [
     ("skip_connection", "conv_shortcut"),
 
     # MS
-    ("temopral_conv", "temp_conv"), # ROFL, they have a typo here --kabachuha
+    ("temopral_conv", "temp_convs"), # ROFL, they have a typo here --kabachuha
 ]
 
 unet_conversion_map_layer = []
