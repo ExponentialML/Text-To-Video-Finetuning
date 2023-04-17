@@ -121,3 +121,6 @@ If you want to use the V1 repository, you can use the branch [here](https://gith
 - [Showlab](https://github.com/showlab/Tune-A-Video) and bryandlee[https://github.com/bryandlee/Tune-A-Video] for their Tune-A-Video contribution that made this much easier.
 - [lucidrains](https://github.com/lucidrains) for their implementations around video diffusion.
 - [cloneofsimo](https://github.com/cloneofsimo) for their diffusers implementation of LoRA.
+- [kabachuha](https://github.com/kabachuha) for their conversion scripts, training ideas, and webui works.
+- [JCBrouwer](https://github.com/JCBrouwer) Inference implementations.
+- [sergiobr](https://github.com/sergiobr) Helpful ideas and bug fixes.
