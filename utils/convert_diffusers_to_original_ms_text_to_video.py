@@ -49,7 +49,7 @@ unet_conversion_map_resnet = [
     ("skip_connection", "conv_shortcut"),
 
     # MS
-    ("temopral_conv", "temp_convs"), # ROFL, they have a typo here --kabachuha
+    #("temopral_conv", "temp_convs"), # ROFL, they have a typo here --kabachuha
 ]
 
 unet_conversion_map_layer = []
@@ -99,13 +99,13 @@ for i in range(4):
         
         # Temporal MS stuff
         hf_down_res_prefix = f"down_blocks.{i}.temp_convs.{j}."
-        sd_down_res_prefix = f"input_blocks.{3*i + j + 1}.0."
+        sd_down_res_prefix = f"input_blocks.{3*i + j + 1}.0.temopral_conv."
         unet_conversion_map_layer.append((sd_down_res_prefix, hf_down_res_prefix))
 
         if i < 3:
             # no attention layers in down_blocks.3
             hf_down_atn_prefix = f"down_blocks.{i}.temp_attentions.{j}."
-            sd_down_atn_prefix = f"input_blocks.{3*i + j + 1}.1."
+            sd_down_atn_prefix = f"input_blocks.{3*i + j + 1}.2."
             unet_conversion_map_layer.append((sd_down_atn_prefix, hf_down_atn_prefix))
 
     for j in range(3):
@@ -124,13 +124,13 @@ for i in range(4):
         
         # loop over resnets/attentions for upblocks
         hf_up_res_prefix = f"up_blocks.{i}.temp_convs.{j}."
-        sd_up_res_prefix = f"output_blocks.{3*i + j}.0."
+        sd_up_res_prefix = f"output_blocks.{3*i + j}.0.temopral_conv."
         unet_conversion_map_layer.append((sd_up_res_prefix, hf_up_res_prefix))
 
         if i > 0:
             # no attention layers in up_blocks.0
             hf_up_atn_prefix = f"up_blocks.{i}.temp_attentions.{j}."
-            sd_up_atn_prefix = f"output_blocks.{3*i + j}.1."
+            sd_up_atn_prefix = f"output_blocks.{3*i + j}.2."
             unet_conversion_map_layer.append((sd_up_atn_prefix, hf_up_atn_prefix))
 
     # Up/Downsamplers are 2D, so don't need to touch them
@@ -155,17 +155,17 @@ unet_conversion_map_layer.append((sd_mid_atn_prefix, hf_mid_atn_prefix))
 
 for j in range(2):
     hf_mid_res_prefix = f"mid_block.resnets.{j}."
-    sd_mid_res_prefix = f"middle_block.{2*j}."
+    sd_mid_res_prefix = f"middle_block.{2*j+1}."
     unet_conversion_map_layer.append((sd_mid_res_prefix, hf_mid_res_prefix))
 
 # Temporal
 hf_mid_atn_prefix = "mid_block.temp_attentions.0."
-sd_mid_atn_prefix = "middle_block.1."
+sd_mid_atn_prefix = "middle_block.2."
 unet_conversion_map_layer.append((sd_mid_atn_prefix, hf_mid_atn_prefix))
 
 for j in range(2):
-    hf_mid_res_prefix = f"mid_block.temp_convs.{j}."
-    sd_mid_res_prefix = f"middle_block.{2*j}."
+    hf_mid_res_prefix = f"mid_block.temp_convs.{j+1}."
+    sd_mid_res_prefix = f"middle_block.{2*j+1}.temopral_conv."
     unet_conversion_map_layer.append((sd_mid_res_prefix, hf_mid_res_prefix))
 
 # The pipeline
@@ -183,10 +183,10 @@ def convert_unet_state_dict(unet_state_dict):
             for sd_part, hf_part in unet_conversion_map_resnet:
                 v = v.replace(hf_part, sd_part)
             mapping[k] = v
-        elif "temp_convs" in k:
-            for sd_part, hf_part in unet_conversion_map_resnet:
-                v = v.replace(hf_part, sd_part)
-            mapping[k] = v
+        # elif "temp_convs" in k:
+        #     for sd_part, hf_part in unet_conversion_map_resnet:
+        #         v = v.replace(hf_part, sd_part)
+        #     mapping[k] = v
     for k, v in mapping.items():
         for sd_part, hf_part in unet_conversion_map_layer:
             v = v.replace(hf_part, sd_part)
