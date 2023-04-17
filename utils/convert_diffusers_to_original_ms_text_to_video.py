@@ -142,7 +142,7 @@ for i in range(4):
 
         # no upsample in up_blocks.3
         hf_upsample_prefix = f"up_blocks.{i}.upsamplers.0."
-        sd_upsample_prefix = f"output_blocks.{3*i + 2}.{1 if i == 0 else 2}."
+        sd_upsample_prefix = f"output_blocks.{3*i + 2}.{1 if i == 0 else 3}."
         unet_conversion_map_layer.append((sd_upsample_prefix, hf_upsample_prefix))
 
 
@@ -155,7 +155,7 @@ unet_conversion_map_layer.append((sd_mid_atn_prefix, hf_mid_atn_prefix))
 
 for j in range(2):
     hf_mid_res_prefix = f"mid_block.resnets.{j}."
-    sd_mid_res_prefix = f"middle_block.{2*j+1}."
+    sd_mid_res_prefix = f"middle_block.{3*j}."
     unet_conversion_map_layer.append((sd_mid_res_prefix, hf_mid_res_prefix))
 
 # Temporal
