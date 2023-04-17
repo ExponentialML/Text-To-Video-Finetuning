@@ -391,7 +391,7 @@ if __name__ == "__main__":
 
     # Convert the UNet model
     unet_state_dict = convert_unet_state_dict(unet_state_dict)
-    unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
+    #unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
 
     # Convert the VAE model
     # vae_state_dict = convert_vae_state_dict(vae_state_dict)
