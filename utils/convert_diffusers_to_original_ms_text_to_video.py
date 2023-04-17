@@ -244,7 +244,7 @@ code2idx = {"q": 0, "k": 1, "v": 2}
 
 
 def convert_text_enc_state_dict_v20(text_enc_dict):
-    print ('Converting the text encoder')
+    #print ('Converting the text encoder')
     new_state_dict = {}
     capture_qkv_weight = {}
     capture_qkv_bias = {}
@@ -444,17 +444,18 @@ if __name__ == "__main__":
     else:
         #state_dict = {"state_dict": state_dict}
         torch.save(state_dict, args.checkpoint_path)
-    
-    print ('Saving CLIP')
-    state_dict = {**text_enc_dict}
 
-    if args.half:
-        state_dict = {k: v.half() for k, v in state_dict.items()}
+    # TODO: CLIP conversion doesn't work atm
+    # print ('Saving CLIP')
+    # state_dict = {**text_enc_dict}
 
-    if args.use_safetensors:
-        save_file(state_dict, args.checkpoint_path)
-    else:
-        #state_dict = {"state_dict": state_dict}
-        torch.save(state_dict, args.clip_checkpoint_path)
+    # if args.half:
+    #     state_dict = {k: v.half() for k, v in state_dict.items()}
+
+    # if args.use_safetensors:
+    #     save_file(state_dict, args.checkpoint_path)
+    # else:
+    #     #state_dict = {"state_dict": state_dict}
+    #     torch.save(state_dict, args.clip_checkpoint_path)
     
     print('Operation successfull')
