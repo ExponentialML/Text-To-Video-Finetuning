@@ -191,7 +191,24 @@ def convert_unet_state_dict(unet_state_dict):
         for sd_part, hf_part in unet_conversion_map_layer:
             v = v.replace(hf_part, sd_part)
         mapping[k] = v
-    new_state_dict = {v: unet_state_dict[k] for k, v in mapping.items()}
+    
+
+    # there must be a pattern, but I don't want to bother atm
+    do_not_unsqueeze = [f'output_blocks.{i}.1.proj_out.weight' for i in range(3, 12)] + [f'output_blocks.{i}.1.proj_in.weight' for i in range(3, 12)] + ['middle_block.1.proj_in.weight', 'middle_block.1.proj_out.weight'] + [f'input_blocks.{i}.1.proj_out.weight' for i in [1, 2, 4, 5, 7, 8]] + [f'input_blocks.{i}.1.proj_in.weight' for i in [1, 2, 4, 5, 7, 8]]
+    print (do_not_unsqueeze)
+
+    new_state_dict = {v: (unet_state_dict[k].unsqueeze(-1) if ('proj_' in k and ('bias' not in k) and (k not in do_not_unsqueeze)) else unet_state_dict[k]) for k, v in mapping.items()}
+    # HACK: idk why the hell it does not work with list comprehension
+    for k, v in new_state_dict.items():
+        has_k = False
+        for n in do_not_unsqueeze:
+            if k == n:
+                has_k = True
+
+        if has_k:
+            v = v.squeeze(-1)
+        new_state_dict[k] = v
+
     return new_state_dict
 
 # TODO: VAE conversion. We doesn't train it in the most cases, but may be handy for the future --kabachuha
