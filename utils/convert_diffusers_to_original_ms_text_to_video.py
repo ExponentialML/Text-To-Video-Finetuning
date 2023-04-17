@@ -137,7 +137,7 @@ for i in range(4):
     if i < 3:
         # no downsample in down_blocks.3
         hf_downsample_prefix = f"down_blocks.{i}.downsamplers.0.conv."
-        sd_downsample_prefix = f"input_blocks.{3*(i+1)}.0.op."
+        sd_downsample_prefix = f"input_blocks.{3*(i+1)}.op."
         unet_conversion_map_layer.append((sd_downsample_prefix, hf_downsample_prefix))
 
         # no upsample in up_blocks.3
