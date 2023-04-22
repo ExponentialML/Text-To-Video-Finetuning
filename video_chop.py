@@ -68,7 +68,9 @@ def chop_video(video_path: str, folder:str, L: int, start_frame:int) -> int:
     video.release()
     return total_frames
 
-def stuff(video_path: str, L: int):
+def stuff(video_path: str, L: int, only_once = True):
+
+    only_once = True
 
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Video file '{video_path}' not found.")
@@ -87,6 +89,7 @@ def stuff(video_path: str, L: int):
     start_frame = 0
 
     while start_frame < total_frames - L:
+
         dir_name = f"scenario_{scenario}"
         os.mkdir(os.path.join(cur_dir_name, dir_name))
         video_path_new = os.path.join(cur_dir_name, dir_name, vid_name)
@@ -94,6 +97,9 @@ def stuff(video_path: str, L: int):
         video_path = video_path_new
         start_frame += chop_video(video_path, dir_name, L, start_frame)
         scenario += 1
+
+        if only_once:
+            break
     
     os.rename(video_path, os.path.join(os.getcwd(), vid_name))
     os.mkdir(orig_name)
@@ -106,8 +112,9 @@ def main():
     parser = argparse.ArgumentParser(description="Chop a video file into subsets of frames.")
     parser.add_argument("video_file", help="Path to the video file.")
     parser.add_argument("--L", help="Num of splits on each level.")
+    parser.add_argument("--subscenariosplit", help="Should it split ", action='store_true', default=False)
     args = parser.parse_args()
-    stuff(args.video_file, int(args.L))
+    stuff(args.video_file, int(args.L), bool(args.subscenariosplit != None and args.subscenariosplit))
 
 if __name__ == "__main__":
     main()

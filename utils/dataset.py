@@ -322,6 +322,7 @@ class VideoFolderDataset(Dataset):
         fps: int = 8,
         path: str = "./data",
         fallback_prompt: str = "",
+        train_infinet=False,
         **kwargs
     ):
         self.tokenizer = tokenizer
@@ -335,6 +336,7 @@ class VideoFolderDataset(Dataset):
 
         self.n_sample_frames = n_sample_frames
         self.fps = fps
+        self.train_infinet = train_infinet
 
     def get_prompt_ids(self, prompt):
         return self.tokenizer(
@@ -349,7 +351,8 @@ class VideoFolderDataset(Dataset):
         return len(self.video_files)
 
     def __getitem__(self, index):
-        vr = decord.VideoReader(self.video_files[index], width=self.width, height=self.height)
+        vid_filename = self.video_files[index]
+        vr = decord.VideoReader(vid_filename, width=self.width, height=self.height)
         native_fps = vr.get_avg_fps()
         every_nth_frame = round(native_fps / self.fps)
 
@@ -365,12 +368,18 @@ class VideoFolderDataset(Dataset):
         video = vr.get_batch(idxs)
         video = rearrange(video, "f h w c -> f c h w")
 
-        if os.path.exists(self.video_files[index].replace(".mp4", ".txt")):
-            with open(self.video_files[index].replace(".mp4", ".txt"), "r") as f:
+        if os.path.exists(vid_filename.replace(".mp4", ".txt")):
+            with open(vid_filename.replace(".mp4", ".txt"), "r") as f:
                 prompt = f.read()
         else:
             prompt = self.fallback_prompt
+        
+        # TODO: use regex
+        depth = 0
+        if vid_filename.startswith('depth_'):
+            depth = int(vid_filename[len('depth_'):vid_filename[len('depth_'):].index('_')])
 
         prompt_ids = self.get_prompt_ids(prompt)
 
-        return {"pixel_values": (video / 127.5 - 1.0), "prompt_ids": prompt_ids[0], "text_prompt": prompt}
+        return {"pixel_values": (video / 127.5 - 1.0), "prompt_ids": prompt_ids[0], "text_prompt": prompt, "diffusion_depth":depth}
+

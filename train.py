@@ -334,11 +334,13 @@ def main(
         num_training_steps=max_train_steps * gradient_accumulation_steps,
     )
 
+    train_infinet = 'infinet' in trainable_modules if trainable_modules is not None else False
+
     # Get the training dataset
     if train_data.pop("type", "regular") == "folder":
-        train_dataset = VideoFolderDataset(**train_data, tokenizer=tokenizer)
+        train_dataset = VideoFolderDataset(**train_data, tokenizer=tokenizer, train_infinet=train_infinet)
     else:
-        train_dataset = VideoDataset(**train_data, tokenizer=tokenizer, train_infinet='infinet' in trainable_modules if trainable_modules is not None else False)
+        train_dataset = VideoDataset(**train_data, tokenizer=tokenizer, train_infinet=train_infinet)
 
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(
@@ -398,6 +400,7 @@ def main(
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {max_train_steps}")
+    logger.info(f"  InfiNet training = {train_infinet}")
     global_step = 0
     first_epoch = 0
 

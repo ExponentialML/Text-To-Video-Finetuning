@@ -30,6 +30,7 @@ trainable_modules:
   - "attn1"
   - "attn2"
   - "attn3"
+  - "infinet"
 seed: 1234
 mixed_precision: "fp16"
 use_8bit_adam: False # This seems to be incompatible at the moment. 
