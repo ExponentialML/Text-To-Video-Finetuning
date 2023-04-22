@@ -38,6 +38,7 @@ def get_fps(video_path):
 def move_the_files(init_path, L, depth, overwrite_dims, width, height, overwrite_fps, fps):
 
     folder_dataset_path = os.path.join(init_path, 'folder_dataset')
+    os.mkdir(folder_dataset_path)
     depth_name = init_path
 
     t_counter=0
@@ -57,7 +58,7 @@ def move_the_files(init_path, L, depth, overwrite_dims, width, height, overwrite
                 
                 # go to the subset for video frames sampling
                 next_depth_name = os.path.join(depth_name, f'depth_{d+1}')
-                next_part_path = os.path.join(next_depth_name, f'part_{i}') # `i` cause we want to sample each corresponding *subset*
+                next_part_path = os.path.join(next_depth_name, f'part_{i+L*j}') # `i` cause we want to sample each corresponding *subset*
 
                 # depths > 0 are *guaranteed* to have L videos in their part_j folders
                 
@@ -68,18 +69,18 @@ def move_the_files(init_path, L, depth, overwrite_dims, width, height, overwrite
                 if overwrite_fps:
                     fps = get_fps(os.path.join(next_part_path, f'subset_{0}.mp4'))
                 
-                write_as_video(os.path.join(folder_dataset_path, f'depth_{d}_part_{j}_subset{i}.mp4'), L_frames, overwrite_dims, width, height, fps)
-                shutil.copy(txt_path, os.path.join(folder_dataset_path, f'depth_{d}_part_{j}_subset{i}.txt'))
+                write_as_video(os.path.join(folder_dataset_path, f'depth_{d}_part_{j}_subset{i+L*j}.mp4'), L_frames, overwrite_dims, width, height, fps)
+                shutil.copy(txt_path, os.path.join(folder_dataset_path, f'depth_{d}_part_{j}_subset{i+L*j}.txt'))
 
-                t += 1
                 tq.set_description(f'Depth {d}, part {j}, subset{i}')
-                tq.update(t)
+                #tq.set_description(os.path.join(next_part_path, f'subset_{0}.mp4'))
+                tq.update(1)
     
     tq.close() 
 
 def main():
     parser = argparse.ArgumentParser(description="Convert the chopped labeled tree-like data into a FolderDataset")
-    parser.add_argument("video_file", help="Path to the video file.")
+    parser.add_argument("outpath", help="Path where to save the end FolderDataset", default=os.getcwd())
     parser.add_argument("--L", help="Num of splits on each level.")
     parser.add_argument("--D", help="Tree depth")
     parser.add_argument("--overwrite_dims", help="Preserve the original video dims", action="store_true")
@@ -88,7 +89,7 @@ def main():
     parser.add_argument("--overwrite_fps", help="Preserve the original video fps", action="store_true")
     parser.add_argument("--fps", help="Output video fps", default=12)
     args = parser.parse_args()
-    move_the_files(args.video_file, int(args.L), int(args.D))
+    move_the_files(args.outpath, int(args.L), int(args.D), bool(args.overwrite_dims), int(args.w), int(args.h), bool(args.overwrite_fps), int(args.fps))
 
 if __name__ == "__main__":
     main()
