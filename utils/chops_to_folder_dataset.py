@@ -5,16 +5,22 @@ import cv2
 from tqdm import tqdm
 import shutil
 from pathlib import Path
+from PIL import Image
 
 def write_as_video(output_filename, video_frames, overwrite_dims, width, height, fps):
     if overwrite_dims:
         height, width, _ = video_frames[0].shape
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_filename, fourcc, fps, (width, height))
-    for j in video_frames:
-        out.write(j)
+    #fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    #out = cv2.VideoWriter(output_filename, fourcc, fps, (width, height))
+    #for j in video_frames:
+    #    out.write(j)
+    video_frames = [Image.fromarray(cv2.cvtColor(j, cv2.COLOR_BGR2RGB)) for j in video_frames]
+    if overwrite_dims:
+        video_frames = [j.resize(width, height) for j in video_frames]
 
-    out.release()
+    video_frames[0].save(output_filename, save_all=True, append_images=video_frames[1:])
+
+    #out.release()
 
 def read_first_frame(video_path):
     patience = 5
@@ -69,7 +75,7 @@ def move_the_files(init_path, L, depth, overwrite_dims, width, height, overwrite
                 if overwrite_fps:
                     fps = get_fps(os.path.join(next_part_path, f'subset_{0}.mp4'))
                 
-                write_as_video(os.path.join(folder_dataset_path, f'depth_{d}_part_{j}_subset{i+L*j}.mp4'), L_frames, overwrite_dims, width, height, fps)
+                write_as_video(os.path.join(folder_dataset_path, f'depth_{d}_part_{j}_subset{i+L*j}.gif'), L_frames, overwrite_dims, width, height, fps)
                 shutil.copy(txt_path, os.path.join(folder_dataset_path, f'depth_{d}_part_{j}_subset{i+L*j}.txt'))
 
                 tq.set_description(f'Depth {d}, part {j}, subset{i}')
