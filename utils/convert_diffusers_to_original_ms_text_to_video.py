@@ -368,7 +368,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--model_path", default=None, type=str, required=True, help="Path to the model to convert.")
     parser.add_argument("--checkpoint_path", default=None, type=str, required=True, help="Path to the output model.")
-    parser.add_argument("--clip_checkpoint_path", default=None, type=str, required=True, help="Path to the output CLIP model.")
+    parser.add_argument("--clip_checkpoint_path", default=None, type=str, help="Path to the output CLIP model.")
     parser.add_argument("--half", action="store_true", help="Save weights in half precision.")
     parser.add_argument(
         "--use_safetensors", action="store_true", help="Save weights use safetensors, default is ckpt."
