@@ -30,7 +30,8 @@ from uuid import uuid4
 
 import numpy as np
 import torch
-from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline, UNet3DConditionModel
+from diffusers import (DPMSolverMultistepScheduler, TextToVideoSDPipeline,
+                       UNet3DConditionModel)
 from einops import rearrange
 from torch import Tensor
 from torch.nn.functional import interpolate
@@ -138,6 +139,16 @@ def decode(pipe: TextToVideoSDPipeline, latents: Tensor, batch_size: int = 8):
     return pixels.float()
 
 
+def primes_up_to(n):
+    sieve = np.ones(n // 3 + (n % 6 == 2), dtype=bool)
+    for i in range(1, int(n**0.5) // 3 + 1):
+        if sieve[i]:
+            k = 3 * i + 1 | 1
+            sieve[k * k // 3 :: 2 * k] = False
+            sieve[k * (k - 2 * (i & 1) + 4) // 3 :: 2 * k] = False
+    return np.r_[2, 3, ((3 * np.nonzero(sieve)[0][1:] + 1) | 1)]
+
+
 @torch.inference_mode()
 def diffuse(
     pipe: TextToVideoSDPipeline,
@@ -168,13 +179,18 @@ def diffuse(
     pipe.scheduler.set_timesteps(num_inference_steps, device=device)
     start_step = round(init_weight * len(pipe.scheduler.timesteps))
     timesteps = pipe.scheduler.timesteps[start_step:]
-    latents = pipe.scheduler.add_noise(
-        original_samples=latents, noise=torch.randn_like(latents), timesteps=timesteps[0]
-    )
+    if init_weight == 0:
+        latents = torch.randn_like(latents)
+    else:
+        latents = pipe.scheduler.add_noise(
+            original_samples=latents, noise=torch.randn_like(latents), timesteps=timesteps[0]
+        )
 
     # manually track previous outputs for the scheduler as we continually change the section of video being diffused
     prev_latents = [None] * order
     prev_latents[-1] = latents
+
+    shifts = np.random.permutation(primes_up_to(window_size))
 
     with pipe.progress_bar(total=len(timesteps) * num_frames // window_size) as progress:
 
@@ -183,18 +199,18 @@ def diffuse(
             progress.set_description(f"Diffusing timestep {t}...")
 
             # rotate latents by a random amount (so each timestep has different chunk borders)
-            shift = np.random.randint(0, window_size)
+            shift = shifts[i % len(shifts)]
             prev_latents = [None if pl is None else torch.roll(pl, shifts=shift, dims=2) for pl in prev_latents]
 
             for idx in range(0, num_frames, window_size):  # diffuse each chunk individually
 
                 # update scheduler's previous outputs from our own cache
+                pipe.scheduler.model_outputs = [prev_latents[(i - 1 - o) % order] for o in range(order, -1, -1)]
                 pipe.scheduler.model_outputs = [
-                    None
-                    if prev_latents[(i - 1 - o) % order] is None
-                    else prev_latents[(i - 1 - o) % order][:, :, idx : idx + window_size, :, :].to(device)
-                    for o in range(order, -1, -1)
+                    None if mo is None else mo[:, :, idx : idx + window_size, :, :].to(device)
+                    for mo in pipe.scheduler.model_outputs
                 ]
+                pipe.scheduler.lower_order_nums = min(i, order)
                 latents_window = pipe.scheduler.model_outputs[-1]
 
                 # expand the latents if we are doing classifier free guidance
@@ -224,7 +240,7 @@ def diffuse(
 
                 # write diffused latents to output
                 if prev_latents[i % order] is None:
-                    prev_latents[i % order] = torch.empty_like(prev_latents[(i - 1) % order])
+                    prev_latents[i % order] = prev_latents[(i - 1) % order]
                 prev_latents[i % order][:, :, idx : idx + window_size, :, :] = latents_window.cpu()
 
                 progress.update()
