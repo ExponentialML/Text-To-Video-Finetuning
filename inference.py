@@ -5,7 +5,8 @@ from pathlib import Path
 from uuid import uuid4
 from utils.lora import inject_inferable_lora
 import torch
-from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline, UNet3DConditionModel
+from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
+from models.unet_3d_condition import UNet3DConditionModel
 from einops import rearrange
 from torch.nn.functional import interpolate
 
