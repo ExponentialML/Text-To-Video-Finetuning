@@ -21,7 +21,7 @@ def initialize_pipeline(model, device="cuda", xformers=False, sdp=False):
         scheduler, tokenizer, text_encoder, vae, _unet = load_primary_models(model)
         del _unet #This is a no op
         unet = UNet3DConditionModel.from_pretrained(model, subfolder='unet')
-        unet.disable_gradient_checkpointing()
+        # unet.disable_gradient_checkpointing()
         
     pipeline = TextToVideoSDPipeline.from_pretrained(
         pretrained_model_name_or_path=model,
