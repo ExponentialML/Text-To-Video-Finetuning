@@ -54,7 +54,6 @@ def initialize_pipeline(
         scheduler, tokenizer, text_encoder, vae, _unet = load_primary_models(model)
         del _unet  # This is a no op
         unet = UNet3DConditionModel.from_pretrained(model, subfolder="unet")
-        unet.disable_gradient_checkpointing()
 
     pipe = TextToVideoSDPipeline.from_pretrained(
         pretrained_model_name_or_path=model,
@@ -180,9 +179,7 @@ def diffuse(
         latents = torch.randn_like(latents)
     else:
         latents = pipe.scheduler.add_noise(
-            original_samples=latents,
-            noise=torch.randn_like(latents),
-            timesteps=timesteps[0],
+            original_samples=latents, noise=torch.randn_like(latents), timesteps=timesteps[0]
         )
 
     # manually track previous outputs for the scheduler as we continually change the section of video being diffused
@@ -199,15 +196,18 @@ def diffuse(
             shift = shifts[i % len(shifts)]
             prev_latents = [None if pl is None else torch.roll(pl, shifts=shift, dims=2) for pl in prev_latents]
 
+            new_latents = torch.zeros_like(prev_latents[(i - 1) % order])
+
             for idx in range(0, num_frames, window_size):  # diffuse each chunk individually
                 # update scheduler's previous outputs from our own cache
-                pipe.scheduler.model_outputs = [prev_latents[(i - 1 - o) % order] for o in range(order, -1, -1)]
+                pipe.scheduler.model_outputs = [prev_latents[(i - 1 - o) % order] for o in reversed(range(order))]
                 pipe.scheduler.model_outputs = [
                     None if mo is None else mo[:, :, idx : idx + window_size, :, :].to(device)
                     for mo in pipe.scheduler.model_outputs
                 ]
                 pipe.scheduler.lower_order_nums = min(i, order)
-                latents_window = pipe.scheduler.model_outputs[-1]
+
+                latents_window = pipe.scheduler.model_outputs[-1].clone()
 
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = torch.cat([latents_window] * 2) if do_classifier_free_guidance else latents_window
@@ -235,11 +235,12 @@ def diffuse(
                 latents_window = rearrange(latents_window, "(b f) c h w -> b c f h w", b=batch_size)
 
                 # write diffused latents to output
-                if prev_latents[i % order] is None:
-                    prev_latents[i % order] = prev_latents[(i - 1) % order]
-                prev_latents[i % order][:, :, idx : idx + window_size, :, :] = latents_window.cpu()
+                new_latents[:, :, idx : idx + window_size, :, :] = latents_window.cpu()
 
                 progress.update()
+
+            # update our cache with the further denoised latents
+            prev_latents[i % order] = new_latents
 
     out_latents = prev_latents[i % order]
 
