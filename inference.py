@@ -30,8 +30,7 @@ from uuid import uuid4
 
 import numpy as np
 import torch
-from diffusers import (DPMSolverMultistepScheduler, TextToVideoSDPipeline,
-                       UNet3DConditionModel)
+from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline, UNet3DConditionModel
 from einops import rearrange
 from torch import Tensor
 from torch.nn.functional import interpolate
@@ -49,15 +48,15 @@ def initialize_pipeline(
     lora_path: str = "",
     lora_rank: int = 64,
 ):
-
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
 
         scheduler, tokenizer, text_encoder, vae, _unet = load_primary_models(model)
         del _unet  # This is a no op
         unet = UNet3DConditionModel.from_pretrained(model, subfolder="unet")
+        unet.disable_gradient_checkpointing()
 
-    pipe: TextToVideoSDPipeline = TextToVideoSDPipeline.from_pretrained(
+    pipe = TextToVideoSDPipeline.from_pretrained(
         pretrained_model_name_or_path=model,
         scheduler=scheduler,
         tokenizer=tokenizer,
@@ -85,7 +84,6 @@ def prepare_input_latents(
     init_video: Optional[str],
     vae_batch_size: int,
 ):
-
     if init_video is None:
         # initialize with random gaussian noise
         scale = pipe.vae_scale_factor
@@ -160,7 +158,6 @@ def diffuse(
     guidance_scale: float,
     window_size: int,
 ):
-
     device = pipe.device
     order = pipe.scheduler.config.solver_order if "solver_order" in pipe.scheduler.config else pipe.scheduler.order
     do_classifier_free_guidance = guidance_scale > 1.0
@@ -183,7 +180,9 @@ def diffuse(
         latents = torch.randn_like(latents)
     else:
         latents = pipe.scheduler.add_noise(
-            original_samples=latents, noise=torch.randn_like(latents), timesteps=timesteps[0]
+            original_samples=latents,
+            noise=torch.randn_like(latents),
+            timesteps=timesteps[0],
         )
 
     # manually track previous outputs for the scheduler as we continually change the section of video being diffused
@@ -193,9 +192,7 @@ def diffuse(
     shifts = np.random.permutation(primes_up_to(window_size))
 
     with pipe.progress_bar(total=len(timesteps) * num_frames // window_size) as progress:
-
         for i, t in enumerate(timesteps):
-
             progress.set_description(f"Diffusing timestep {t}...")
 
             # rotate latents by a random amount (so each timestep has different chunk borders)
@@ -203,7 +200,6 @@ def diffuse(
             prev_latents = [None if pl is None else torch.roll(pl, shifts=shift, dims=2) for pl in prev_latents]
 
             for idx in range(0, num_frames, window_size):  # diffuse each chunk individually
-
                 # update scheduler's previous outputs from our own cache
                 pipe.scheduler.model_outputs = [prev_latents[(i - 1 - o) % order] for o in range(order, -1, -1)]
                 pipe.scheduler.model_outputs = [
@@ -270,9 +266,7 @@ def inference(
     lora_path: str = "",
     lora_rank: int = 64,
 ):
-
     with torch.autocast(device, dtype=torch.half):
-
         # prepare models
         pipe = initialize_pipeline(model, device, xformers, sdp, lora_path, lora_rank)
 
@@ -390,7 +384,6 @@ if __name__ == "__main__":
     os.makedirs(args.output_dir, exist_ok=True)
 
     for video in videos:
-
         if args.remove_watermark:
             print("Inpainting watermarks...")
             video = rearrange(video, "c f h w -> f c h w").add(1).div(2)
