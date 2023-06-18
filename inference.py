@@ -30,8 +30,7 @@ from uuid import uuid4
 
 import numpy as np
 import torch
-from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
-from models.unet_3d_condition import UNet3DConditionModel
+from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline, UNet3DConditionModel
 from einops import rearrange
 from torch import Tensor
 from torch.nn.functional import interpolate
