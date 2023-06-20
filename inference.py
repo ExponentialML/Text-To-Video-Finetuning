@@ -34,6 +34,7 @@ from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline, UNet3D
 from einops import rearrange
 from torch import Tensor
 from torch.nn.functional import interpolate
+from tqdm import trange
 
 from train import export_to_video, handle_memory_attention, load_primary_models
 from utils.lama import inpaint_watermark
@@ -99,13 +100,13 @@ def prepare_input_latents(
 
 
 def encode(pipe: TextToVideoSDPipeline, pixels: Tensor, batch_size: int = 8):
-    print("Encoding video frames...")
-
     nf = pixels.shape[2]
     pixels = rearrange(pixels, "b c f h w -> (b f) c h w")
 
     latents = []
-    for idx in range(0, pixels.shape[0], batch_size):
+    for idx in trange(
+        0, pixels.shape[0], batch_size, desc="Encoding to latents...", unit_scale=batch_size, unit="frame"
+    ):
         pixels_batch = pixels[idx : idx + batch_size].to(pipe.device, dtype=torch.half)
         latents_batch = pipe.vae.encode(pixels_batch).latent_dist.sample()
         latents_batch = latents_batch.mul(pipe.vae.config.scaling_factor).cpu()
@@ -118,13 +119,13 @@ def encode(pipe: TextToVideoSDPipeline, pixels: Tensor, batch_size: int = 8):
 
 
 def decode(pipe: TextToVideoSDPipeline, latents: Tensor, batch_size: int = 8):
-    print("Decoding video frames...")
-
     nf = latents.shape[2]
     latents = rearrange(latents, "b c f h w -> (b f) c h w")
 
     pixels = []
-    for idx in range(0, latents.shape[0], batch_size):
+    for idx in trange(
+        0, latents.shape[0], batch_size, desc="Decoding to pixels...", unit_scale=batch_size, unit="frame"
+    ):
         latents_batch = latents[idx : idx + batch_size].to(pipe.device, dtype=torch.half)
         latents_batch = latents_batch.div(pipe.vae.config.scaling_factor)
         pixels_batch = pipe.vae.decode(latents_batch).sample.cpu()
@@ -187,6 +188,7 @@ def diffuse(
     prev_latents[-1] = latents
 
     shifts = np.random.permutation(primes_up_to(window_size))
+    total_shift = 0
 
     with pipe.progress_bar(total=len(timesteps) * num_frames // window_size) as progress:
         for i, t in enumerate(timesteps):
@@ -195,6 +197,7 @@ def diffuse(
             # rotate latents by a random amount (so each timestep has different chunk borders)
             shift = shifts[i % len(shifts)]
             prev_latents = [None if pl is None else torch.roll(pl, shifts=shift, dims=2) for pl in prev_latents]
+            total_shift += shift
 
             new_latents = torch.zeros_like(prev_latents[(i - 1) % order])
 
@@ -243,6 +246,7 @@ def diffuse(
             prev_latents[i % order] = new_latents
 
     out_latents = prev_latents[i % order]
+    out_latents = torch.roll(out_latents, shifts=-total_shift, dims=2)
 
     return out_latents
 
