@@ -9,6 +9,9 @@ from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
 from models.unet_3d_condition import UNet3DConditionModel
 from einops import rearrange
 from torch.nn.functional import interpolate
+from compel import Compel
+import re
+import platform
 
 from train import export_to_video, handle_memory_attention, load_primary_models
 from utils.lama import inpaint_watermark
@@ -21,7 +24,6 @@ def initialize_pipeline(model, device="cuda", xformers=False, sdp=False):
         scheduler, tokenizer, text_encoder, vae, _unet = load_primary_models(model)
         del _unet #This is a no op
         unet = UNet3DConditionModel.from_pretrained(model, subfolder='unet')
-        # unet.disable_gradient_checkpointing()
         
     pipeline = TextToVideoSDPipeline.from_pretrained(
         pretrained_model_name_or_path=model,
@@ -39,8 +41,11 @@ def initialize_pipeline(model, device="cuda", xformers=False, sdp=False):
 
 
 def vid2vid(
-    pipeline, init_video, init_weight, prompt, negative_prompt, height, width, num_inference_steps, guidance_scale
+    pipeline, init_video, init_weight, prompt, negative_prompt, height, width, num_inference_steps, guidance_scale, seed
 ):
+    if seed is not None:
+        torch.manual_seed(seed)
+
     num_frames = init_video.shape[2]
     init_video = rearrange(init_video, "b c f h w -> (b f) c h w")
     latents = pipeline.vae.encode(init_video).latent_dist.sample()
@@ -56,8 +61,10 @@ def vid2vid(
     do_classifier_free_guidance = guidance_scale > 1.0
 
     prompt_embeds = pipeline._encode_prompt(
-        prompt=prompt,
-        negative_prompt=negative_prompt,
+        prompt=None,
+        negative_prompt=None,
+        prompt_embeds=prompt,
+        negative_prompt_embeds=negative_prompt,
         device=latents.device,
         num_images_per_prompt=1,
         do_classifier_free_guidance=do_classifier_free_guidance,
@@ -110,6 +117,7 @@ def inference(
     height=256,
     num_steps=50,
     guidance_scale=9,
+    seed=None,
     init_video=None,
     init_weight=0.5,
     device="cuda",
@@ -121,8 +129,9 @@ def inference(
     with torch.autocast(device, dtype=torch.half):
         pipeline = initialize_pipeline(model, device, xformers, sdp)
         inject_inferable_lora(pipeline, lora_path, r=lora_rank)
-        prompt = [prompt] * batch_size
-        negative_prompt = ([negative_prompt] * batch_size) if negative_prompt is not None else None
+        compel_proc = Compel(tokenizer=pipeline.tokenizer, text_encoder=pipeline.text_encoder)
+        prompt = compel_proc([prompt] * batch_size)
+        negative_prompt = compel_proc([negative_prompt] * batch_size) if negative_prompt is not None else None
 
         if init_video is not None:
             videos = vid2vid(
@@ -135,18 +144,22 @@ def inference(
                 width=width,
                 num_inference_steps=num_steps,
                 guidance_scale=guidance_scale,
+                seed=seed,
             )
 
         else:
+            generator = [torch.Generator(device=device).manual_seed(i) for i in range(seed, seed + batch_size)] if seed is not None else None
+            
             videos = pipeline(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
+                prompt_embeds=prompt,
+                negative_prompt_embeds=negative_prompt,
                 num_frames=num_frames,
                 height=height,
                 width=width,
                 num_inference_steps=num_steps,
                 guidance_scale=guidance_scale,
                 output_type="pt",
+                generator=generator,
             ).frames
 
         return videos
@@ -168,6 +181,7 @@ if __name__ == "__main__":
     parser.add_argument("-H", "--height", type=int, default=256)
     parser.add_argument("-s", "--num-steps", type=int, default=50)
     parser.add_argument("-g", "--guidance-scale", type=float, default=9)
+    parser.add_argument("-r", "--seed", type=int, default=None)
     parser.add_argument("-i", "--init-video", type=str, default=None)
     parser.add_argument("-iw", "--init-weight", type=float, default=0.5)
     parser.add_argument("-f", "--fps", type=int, default=8)
@@ -195,9 +209,12 @@ if __name__ == "__main__":
 
     os.makedirs(output_dir, exist_ok=True)
     out_stem = f"{output_dir}/"
+    
+    prompt0 = re.sub(r'[<>:"/\\|?*\x00-\x1F]', '_', prompt) if platform.system() == 'Windows' else prompt
+        
     if init_video is not None:
-        out_stem += f"({Path(init_video).stem}) * {args['init_weight']} | "
-    out_stem += f"{prompt}"
+        out_stem += f"[({Path(init_video).stem}) x {args['init_weight']}] "
+    out_stem += f"{prompt0}"
 
     for video in videos:
 
