@@ -214,7 +214,7 @@ class VideoJsonDataset(Dataset):
 
             video, _ = self.process_video_wrapper(clip_path)
 
-            prompt_ids = prompt_ids = get_prompt_ids(prompt, self.tokenizer)
+            prompt_ids = get_prompt_ids(prompt, self.tokenizer)
 
             return video, prompt, prompt_ids
 
