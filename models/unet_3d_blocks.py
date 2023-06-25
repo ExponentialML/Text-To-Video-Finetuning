@@ -302,6 +302,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
                     norm_num_groups=resnet_groups,
+                    double_self_attention=True
                 )
             )
             resnets.append(
@@ -460,6 +461,7 @@ class CrossAttnDownBlock3D(nn.Module):
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
                     norm_num_groups=resnet_groups,
+                    double_self_attention=True
                 )
             )
         self.resnets = nn.ModuleList(resnets)
@@ -693,6 +695,7 @@ class CrossAttnUpBlock3D(nn.Module):
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
                     norm_num_groups=resnet_groups,
+                    double_self_attention=True
                 )
             )
         self.resnets = nn.ModuleList(resnets)

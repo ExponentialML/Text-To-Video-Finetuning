@@ -440,6 +440,43 @@ def tensor_to_vae_latent(t, vae):
 
     return latents
 
+
+def legacy_losses(video_length, text_trainable, encoder_hidden_states, noisy_latents, target):
+    # Here we do two passes for video and text training.
+    # If we are on the second iteration of the loop, get one frame.
+    # This allows us to train text information only on the spatial layers.
+    losses = []
+    should_truncate_video = (video_length > 1 and text_trainable)
+
+    # We detach the encoder hidden states for the first pass (video frames > 1)
+    # Then we make a clone of the initial state to ensure we can train it in the loop.
+    detached_encoder_state = encoder_hidden_states.clone().detach()
+    trainable_encoder_state = encoder_hidden_states.clone()
+
+    for i in range(2):
+
+        should_detach = noisy_latents.shape[2] > 1 and i == 0
+
+        if should_truncate_video and i == 1:
+            noisy_latents = noisy_latents[:,:,1,:,:].unsqueeze(2)
+            target = target[:,:,1,:,:].unsqueeze(2)
+                
+        encoder_hidden_states = (
+            detached_encoder_state if should_detach else trainable_encoder_state
+        )
+
+        model_pred = unet(noisy_latents, timesteps, encoder_hidden_states=encoder_hidden_states).sample
+        loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+        losses.append(loss)
+        
+        # This was most likely single frame training or a single image.
+        if video_length == 1 and i == 0: break
+
+    loss = losses[0] if len(losses) == 1 else losses[0] + losses[1] 
+
+    return loss
+
 def sample_noise(latents, noise_strength, use_offset_noise):
     b ,c, f, *_ = latents.shape
     noise_latents = torch.randn_like(latents, device=latents.device)
@@ -565,6 +602,7 @@ def main(
     text_encoder_lora_modules: Tuple[str] = ["CLIPEncoderLayer"],
     lora_rank: int = 16,
     lora_path: str = '',
+    legacy_train: bool = False,
     **kwargs
 ):
 
@@ -814,38 +852,11 @@ def main(
             raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
 
         
-        # Here we do two passes for video and text training.
-        # If we are on the second iteration of the loop, get one frame.
-        # This allows us to train text information only on the spatial layers.
-        losses = []
-        should_truncate_video = (video_length > 1 and text_trainable)
-
-        # We detach the encoder hidden states for the first pass (video frames > 1)
-        # Then we make a clone of the initial state to ensure we can train it in the loop.
-        detached_encoder_state = encoder_hidden_states.clone().detach()
-        trainable_encoder_state = encoder_hidden_states.clone()
-
-        for i in range(2):
-
-            should_detach = noisy_latents.shape[2] > 1 and i == 0
-
-            if should_truncate_video and i == 1:
-                noisy_latents = noisy_latents[:,:,1,:,:].unsqueeze(2)
-                target = target[:,:,1,:,:].unsqueeze(2)
-                       
-            encoder_hidden_states = (
-                detached_encoder_state if should_detach else trainable_encoder_state
-            )
-
+        if legacy_train:
+            loss = legacy_losses(video_length, text_trainable, encoder_hidden_states, noisy_latents, target)
+        else:
             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states=encoder_hidden_states).sample
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
-            losses.append(loss)
-            
-            # This was most likely single frame training or a single image.
-            if video_length == 1 and i == 0: break
-
-        loss = losses[0] if len(losses) == 1 else losses[0] + losses[1] 
 
         return loss, latents
 
