@@ -88,7 +88,7 @@ def prepare_input_latents(
         # initialize with random gaussian noise
         scale = pipe.vae_scale_factor
         shape = (batch_size, pipe.unet.config.in_channels, num_frames, height // scale, width // scale)
-        latents = torch.randn(shape)
+        latents = torch.randn(shape, dtype=torch.half, device=pipe.device)
 
     else:
         # encode init_video to latents
@@ -157,6 +157,7 @@ def diffuse(
     num_inference_steps: int,
     guidance_scale: float,
     window_size: int,
+    rotate: bool,
 ):
     device = pipe.device
     order = pipe.scheduler.config.solver_order if "solver_order" in pipe.scheduler.config else pipe.scheduler.order
@@ -184,33 +185,35 @@ def diffuse(
         )
 
     # manually track previous outputs for the scheduler as we continually change the section of video being diffused
-    prev_latents = [None] * order
-    prev_latents[-1] = latents
+    model_outputs = [None] * order
 
-    shifts = np.random.permutation(primes_up_to(window_size))
-    total_shift = 0
+    if rotate:
+        shifts = np.random.permutation(primes_up_to(window_size))
+        total_shift = 0
 
     with pipe.progress_bar(total=len(timesteps) * num_frames // window_size) as progress:
         for i, t in enumerate(timesteps):
             progress.set_description(f"Diffusing timestep {t}...")
 
-            # rotate latents by a random amount (so each timestep has different chunk borders)
-            shift = shifts[i % len(shifts)]
-            prev_latents = [None if pl is None else torch.roll(pl, shifts=shift, dims=2) for pl in prev_latents]
-            total_shift += shift
+            if rotate:  # rotate latents by a random amount (so each timestep has different chunk borders)
+                shift = shifts[i % len(shifts)]
+                model_outputs = [None if pl is None else torch.roll(pl, shifts=shift, dims=2) for pl in model_outputs]
+                latents = torch.roll(latents, shifts=shift, dims=2)
+                total_shift += shift
 
-            new_latents = torch.zeros_like(prev_latents[(i - 1) % order])
+            new_latents = torch.zeros_like(latents)
+            new_outputs = torch.zeros_like(latents)
 
             for idx in range(0, num_frames, window_size):  # diffuse each chunk individually
                 # update scheduler's previous outputs from our own cache
-                pipe.scheduler.model_outputs = [prev_latents[(i - 1 - o) % order] for o in reversed(range(order))]
+                pipe.scheduler.model_outputs = [model_outputs[(i - 1 - o) % order] for o in reversed(range(order))]
                 pipe.scheduler.model_outputs = [
                     None if mo is None else mo[:, :, idx : idx + window_size, :, :].to(device)
                     for mo in pipe.scheduler.model_outputs
                 ]
                 pipe.scheduler.lower_order_nums = min(i, order)
 
-                latents_window = pipe.scheduler.model_outputs[-1].clone()
+                latents_window = latents[:, :, idx : idx + window_size, :, :]
 
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = torch.cat([latents_window] * 2) if do_classifier_free_guidance else latents_window
@@ -240,15 +243,21 @@ def diffuse(
                 # write diffused latents to output
                 new_latents[:, :, idx : idx + window_size, :, :] = latents_window.cpu()
 
+                # store scheduler's internal output representation in our cache
+                new_outputs[:, :, idx : idx + window_size, :, :] = rearrange(
+                    pipe.scheduler.model_outputs[-1], "(b f) c h w -> b c f h w", b=batch_size
+                )
+
                 progress.update()
 
             # update our cache with the further denoised latents
-            prev_latents[i % order] = new_latents
+            latents = new_latents
+            model_outputs[i % order] = new_outputs
 
-    out_latents = prev_latents[i % order]
-    out_latents = torch.roll(out_latents, shifts=-total_shift, dims=2)
+    if rotate:
+        new_latents = torch.roll(new_latents, shifts=-total_shift, dims=2)
 
-    return out_latents
+    return new_latents
 
 
 @torch.inference_mode()
@@ -270,6 +279,7 @@ def inference(
     sdp: bool = False,
     lora_path: str = "",
     lora_rank: int = 64,
+    loop: bool = False,
 ):
     with torch.autocast(device, dtype=torch.half):
         # prepare models
@@ -297,6 +307,7 @@ def inference(
             num_inference_steps=num_steps,
             guidance_scale=guidance_scale,
             window_size=window_size,
+            rotate=loop or window_size is not None,
         )
 
         # decode latents to pixel space
@@ -333,6 +344,7 @@ if __name__ == "__main__":
     parser.add_argument("-lP", "--lora_path", type=str, default="", help="Path to Low Rank Adaptation checkpoint file (defaults to empty string, which uses no LoRA).")
     parser.add_argument("-lR", "--lora_rank", type=int, default=64, help="Size of the LoRA checkpoint's projection matrix (defaults to 64).")
     parser.add_argument("-rw", "--remove-watermark", action="store_true", help="Post-process the videos with LAMA to inpaint ModelScope's common watermarks.")
+    parser.add_argument("-l", "--loop", action="store_true", help="Make the video loop (by rotating frame order during diffusion).")
     args = parser.parse_args()
     # fmt: on
 
@@ -382,6 +394,7 @@ if __name__ == "__main__":
         sdp=args.sdp,
         lora_path=args.lora_path,
         lora_rank=args.lora_rank,
+        loop=args.loop,
     )
 
     # =========================================
