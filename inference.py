@@ -23,6 +23,8 @@
 
 import argparse
 import os
+import platform
+import re
 import warnings
 from pathlib import Path
 from typing import List, Optional
@@ -30,6 +32,7 @@ from uuid import uuid4
 
 import numpy as np
 import torch
+from compel import Compel
 from diffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline, UNet3DConditionModel
 from einops import rearrange
 from torch import Tensor
@@ -152,8 +155,10 @@ def diffuse(
     pipe: TextToVideoSDPipeline,
     latents: Tensor,
     init_weight: float,
-    prompt: str,
-    negative_prompt: str,
+    prompt: Optional[List[str]],
+    negative_prompt: Optional[List[str]],
+    prompt_embeds: Optional[List[Tensor]],
+    negative_prompt_embeds: Optional[List[Tensor]],
     num_inference_steps: int,
     guidance_scale: float,
     window_size: int,
@@ -168,6 +173,8 @@ def diffuse(
     prompt_embeds = pipe._encode_prompt(
         prompt=prompt,
         negative_prompt=negative_prompt,
+        prompt_embeds=prompt_embeds,
+        negative_prompt_embeds=negative_prompt_embeds,
         device=device,
         num_images_per_prompt=1,
         do_classifier_free_guidance=do_classifier_free_guidance,
@@ -263,8 +270,8 @@ def diffuse(
 @torch.inference_mode()
 def inference(
     model: str,
-    prompt: List[str],
-    negative_prompt: Optional[List[str]] = None,
+    prompt: str,
+    negative_prompt: Optional[str] = None,
     width: int = 256,
     height: int = 256,
     num_frames: int = 24,
@@ -280,10 +287,18 @@ def inference(
     lora_path: str = "",
     lora_rank: int = 64,
     loop: bool = False,
+    seed: Optional[int] = None,
 ):
+    if seed is not None:
+        torch.manual_seed(seed)
+
     with torch.autocast(device, dtype=torch.half):
         # prepare models
         pipe = initialize_pipeline(model, device, xformers, sdp, lora_path, lora_rank)
+
+        # prepare prompts
+        compel = Compel(tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder)
+        prompt_embeds, negative_prompt_embeds = compel(prompt), compel(negative_prompt) if negative_prompt else None
 
         # prepare input latents
         init_latents = prepare_input_latents(
@@ -304,10 +319,12 @@ def inference(
             init_weight=init_weight,
             prompt=prompt,
             negative_prompt=negative_prompt,
+            prompt_embeds=prompt_embeds,
+            negative_prompt_embeds=negative_prompt_embeds,
             num_inference_steps=num_steps,
             guidance_scale=guidance_scale,
             window_size=window_size,
-            rotate=loop or window_size is not None,
+            rotate=loop or window_size < num_frames,
         )
 
         # decode latents to pixel space
@@ -345,6 +362,7 @@ if __name__ == "__main__":
     parser.add_argument("-lR", "--lora_rank", type=int, default=64, help="Size of the LoRA checkpoint's projection matrix (defaults to 64).")
     parser.add_argument("-rw", "--remove-watermark", action="store_true", help="Post-process the videos with LAMA to inpaint ModelScope's common watermarks.")
     parser.add_argument("-l", "--loop", action="store_true", help="Make the video loop (by rotating frame order during diffusion).")
+    parser.add_argument("-r", "--seed", type=int, default=None, help="Random seed to make generations reproducible.")
     args = parser.parse_args()
     # fmt: on
 
@@ -354,17 +372,16 @@ if __name__ == "__main__":
 
     out_name = f"{args.output_dir}/"
     if args.init_video is not None:
-        out_name += f"({Path(args.init_video).stem}) * {args.init_weight} | "
-    out_name += f"{args.prompt}"
+        out_name += f"[({Path(args.init_video).stem}) x {args.init_weight}] "
+    prompt = re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", args.prompt) if platform.system() == "Windows" else args.prompt
+    out_name += f"{prompt}"
 
-    args.prompt = [args.prompt] * args.batch_size
+    args.prompt = [prompt] * args.batch_size
     if args.negative_prompt is not None:
         args.negative_prompt = [args.negative_prompt] * args.batch_size
 
     if args.window_size is None:
         args.window_size = args.num_frames
-    else:
-        assert args.num_frames % args.window_size == 0, "num_frames must be exactly divisible by window_size!"
 
     if args.init_video is not None:
         vr = decord.VideoReader(args.init_video)

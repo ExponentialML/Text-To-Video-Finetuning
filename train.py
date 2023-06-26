@@ -51,11 +51,7 @@ from utils.lora import (
     monkeypatch_or_replace_lora_extended
 )
 
-
 already_printed_trainables = False
-
-# Will error if the minimal version of diffusers is not installed. Remove at your own risks.
-check_min_version("0.10.0.dev0")
 
 logger = get_logger(__name__, log_level="INFO")
 
@@ -577,8 +573,8 @@ def main(
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
         mixed_precision=mixed_precision,
-        log_with="tensorboard",
-        logging_dir=output_dir
+        log_with="wandb",
+        project_dir=output_dir
     )
 
     # Make one log on every process with the configuration for debugging.
