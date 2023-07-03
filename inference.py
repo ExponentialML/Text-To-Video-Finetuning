@@ -112,7 +112,7 @@ def encode(pipe: TextToVideoSDPipeline, pixels: Tensor, batch_size: int = 8):
     ):
         pixels_batch = pixels[idx : idx + batch_size].to(pipe.device, dtype=torch.half)
         latents_batch = pipe.vae.encode(pixels_batch).latent_dist.sample()
-        latents_batch = latents_batch.mul(pipe.vae.config.scaling_factor).cpu()
+        latents_batch = latents_batch.mul(pipe.vae.config.scaling_factor).to(pipe.device)
         latents.append(latents_batch)
     latents = torch.cat(latents)
 
