@@ -548,6 +548,7 @@ def main(
     text_encoder_gradient_checkpointing: bool = False,
     checkpointing_steps: int = 500,
     resume_from_checkpoint: Optional[str] = None,
+    resume_step: Optional[int] = None,
     mixed_precision: Optional[str] = "fp16",
     use_8bit_adam: bool = False,
     enable_xformers_memory_efficient_attention: bool = True,
