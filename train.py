@@ -792,10 +792,10 @@ def main(
                     negation=text_encoder_negation
             )
             cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
-                
-        # Fixes gradient checkpointing training.
+               
+        # *Potentially* Fixes gradient checkpointing training.
         # See: https://github.com/prigoyal/pytorch_memonger/blob/master/tutorial/Checkpointing_for_PyTorch_models.ipynb
-        if gradient_checkpointing or text_encoder_gradient_checkpointing:
+        if kwargs.get('eval_train', False):
             unet.eval()
             text_encoder.eval()
             
