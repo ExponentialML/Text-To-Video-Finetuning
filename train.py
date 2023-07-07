@@ -480,15 +480,15 @@ def save_pipe(
     u_dtype, t_dtype, v_dtype = unet.dtype, text_encoder.dtype, vae.dtype 
 
    # Copy the model without creating a reference to it. This allows keeping the state of our lora training if enabled.
-    unet_out = copy.deepcopy(accelerator.unwrap_model(unet, keep_fp32_wrapper=False))
-    text_encoder_out = copy.deepcopy(accelerator.unwrap_model(text_encoder, keep_fp32_wrapper=False))
+    unet_out = copy.deepcopy(accelerator.unwrap_model(unet.cpu(), keep_fp32_wrapper=False))
+    text_encoder_out = copy.deepcopy(accelerator.unwrap_model(text_encoder.cpu(), keep_fp32_wrapper=False))
 
     pipeline = TextToVideoSDPipeline.from_pretrained(
         path,
         unet=unet_out,
         text_encoder=text_encoder_out,
         vae=vae,
-    ).to(torch_dtype=torch.float16)
+    ).to(torch_dtype=torch.float32)
     
     handle_lora_save(
         use_unet_lora, 
