@@ -91,7 +91,7 @@ def prepare_input_latents(
         # initialize with random gaussian noise
         scale = pipe.vae_scale_factor
         shape = (batch_size, pipe.unet.config.in_channels, num_frames, height // scale, width // scale)
-        latents = torch.randn(shape, dtype=torch.half)
+        latents = torch.randn(shape, dtype=torch.half, device=pipe.device)
 
     else:
         # encode init_video to latents
