@@ -91,11 +91,11 @@ def prepare_input_latents(
         # initialize with random gaussian noise
         scale = pipe.vae_scale_factor
         shape = (batch_size, pipe.unet.config.in_channels, num_frames, height // scale, width // scale)
-        latents = torch.randn(shape, dtype=torch.half, device=pipe.device)
+        latents = torch.randn(shape, dtype=torch.half)
 
     else:
         # encode init_video to latents
-        latents = encode(pipe, init_video, vae_batch_size).to(pipe.device)
+        latents = encode(pipe, init_video, vae_batch_size)
         if latents.shape[0] != batch_size:
             latents = latents.repeat(batch_size, 1, 1, 1, 1)
 
@@ -220,7 +220,7 @@ def diffuse(
                 ]
                 pipe.scheduler.lower_order_nums = min(i, order)
 
-                latents_window = latents[:, :, idx : idx + window_size, :, :]
+                latents_window = latents[:, :, idx : idx + window_size, :, :].to(pipe.device)
 
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = torch.cat([latents_window] * 2) if do_classifier_free_guidance else latents_window
