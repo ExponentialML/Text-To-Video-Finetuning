@@ -184,10 +184,11 @@ class Conv3d(nn.Conv3d, LoRALayer):
         if self.r > 0 and not self.merged:
             return F.conv3d(
                 x, 
-                self.weight + (self.lora_B.transpose(0,1) @ self.lora_A.transpose(0,1)).view(self.weight.shape) * self.scaling,
-                self.bias, self.stride, self.padding, self.dilation, self.groups
+                self.weight + torch.mean((self.lora_B @ self.lora_A).view(self.view_shape), dim=-2,  keepdim=True) * \
+                    self.scaling, self.bias, self.stride, self.padding, self.dilation, self.groups
             )
-        return nn.Conv2d.forward(self, x)
+        return nn.Conv3d.forward(self, x)
+
 
 def create_lora_linear(child_module, r, dropout=0, bias=False, scale=0):
     return loralb.Linear(
