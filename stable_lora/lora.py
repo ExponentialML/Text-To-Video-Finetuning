@@ -9,7 +9,6 @@ import json
 
 from torch.utils.data import ConcatDataset
 from transformers import CLIPTokenizer
-from .convert_to_compvis import convert_unet_state_dict, convert_text_enc_state_dict
 
 try:
     from safetensors.torch import save_file, safe_open
@@ -185,51 +184,10 @@ class Conv3d(nn.Conv3d, LoRALayer):
         if self.r > 0 and not self.merged:
             return F.conv3d(
                 x, 
-                self.weight + torch.mean((self.lora_B @ self.lora_A).view(self.view_shape), dim=-2,  keepdim=True) * \
-                    self.scaling, self.bias, self.stride, self.padding, self.dilation, self.groups
+                self.weight + (self.lora_B.transpose(0,1) @ self.lora_A.transpose(0,1)).view(self.weight.shape) * self.scaling,
+                self.bias, self.stride, self.padding, self.dilation, self.groups
             )
-        return nn.Conv3d.forward(self, x)
-
-def process_lora_metadata_dict(dataset):
-    keys_to_exclude = [
-        "center_crop", 
-        "color_jitter", 
-        "h_flip", 
-        "instance_data_root",
-        "instance_images_path",
-        "class_images_path",
-        "class_data_root",
-        "dataset_norm",
-        "image_transforms",
-        "_length",
-        "resize",
-        "normalized_mean_std"
-    ]
-    return {
-        k: str(v) for k, v in dataset.items() \
-            if (k not in keys_to_exclude and \
-                not isinstance(v, CLIPTokenizer))
-        }
-
-def create_lora_metadata(lora_name, train_dataset):
-    import uuid
-    is_concat_dataset = isinstance(train_dataset, ConcatDataset)
-    dataset = (
-        train_dataset.__dict__ if not is_concat_dataset
-            else 
-        [d.__dict__ for d in train_dataset.datasets]
-    )   
-    if is_concat_dataset:
-        dataset = [process_lora_metadata_dict(x) for x in dataset]
-    else:
-        dataset = process_lora_metadata_dict(dataset)
-    
-    metadata = {
-        "stable_lora": "v1", 
-        "lora_name": lora_name + "_" + uuid.uuid4().hex.lower()[:5],
-        "train_dataset": json.dumps(dataset, indent=4)
-    }
-    return metadata
+        return nn.Conv2d.forward(self, x)
 
 def create_lora_linear(child_module, r, dropout=0, bias=False, scale=0):
     return loralb.Linear(
@@ -249,7 +207,6 @@ def create_lora_conv(child_module, r, dropout=0, bias=False, rescale=False, scal
         child_module.out_channels,
         kernel_size=child_module.kernel_size[0],
         padding=child_module.padding,
-        stride=child_module.stride,
         merge_weights=False,
         bias=bias,
         lora_dropout=dropout,
