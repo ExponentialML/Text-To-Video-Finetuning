@@ -37,16 +37,34 @@ cached_latent_dir: null #/path/to/cached_latents
 # Train the text encoder. Leave at false to use LoRA only (Recommended).
 train_text_encoder: False
 
-# https://github.com/cloneofsimo/lora
-# Use LoRA to train extra layers whilst saving memory. It trains both a LoRA & the model itself.
-# This works slightly different than vanilla LoRA and DOES NOT save a separate file.
-# It is simply used as a mechanism for saving memory by keeping layers frozen and training the residual.
+# https://github.com/cloneofsimo/lora (NOT Compatible with webui extension)
+# This is the first, original implementation of LoRA by cloneofsimo.
+# Use this version if you want to maintain compatibility to the original version.
 
+# https://github.com/ExponentialML/Stable-LoRA/tree/main (Compatible with webui text2video extension)
+# This is an implementation based off of the original LoRA repository by Microsoft, and the default LoRA method here.
+# It works a different by using embeddings instead of the intermediate activations (Linear || Conv).
+# This means that there isn't an extra function when doing low ranking adaption.
+# It solely saves the weight differential between the initialized weights and updates. 
+
+# "cloneofsimo" or "stable_lora"
+lora_version: "stable_lora"
 # Use LoRA for the UNET model.
 use_unet_lora: True
 
 # Use LoRA for the Text Encoder.
 use_text_lora: True
+
+# https://github.com/kabachuha/sd-webui-text2video
+# This saves a LoRA that is compatible with the text2video webui extension.
+# It only works when the lora version is 'stable_lora'.
+# This is also a DIFFERENT implementation than Kohya's, so it will NOT work the same implementation.
+save_lora_for_webui: True
+
+# The LoRA file will be converted to a different format to be compatible with the webui extension.
+# The difference between this and 'save_lora_for_webui' is that you can continue training a Diffusers pipeline model
+# when this version is set to False
+only_lora_for_webui: False
 
 # The modules to use for LoRA. Different from 'trainable_modules'.
 unet_lora_modules:

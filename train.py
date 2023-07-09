@@ -40,16 +40,7 @@ from transformers.models.clip.modeling_clip import CLIPEncoder
 from utils.dataset import VideoJsonDataset, SingleVideoDataset, \
     ImageDataset, VideoFolderDataset, CachedDataset
 from einops import rearrange, repeat
-
-from utils.lora import (
-    extract_lora_ups_down,
-    inject_trainable_lora,
-    inject_trainable_lora_extended,
-    save_lora_weight,
-    train_patch_pipe,
-    monkeypatch_or_replace_lora,
-    monkeypatch_or_replace_lora_extended
-)
+from utils.lora_handler import LoraHandler, LORA_VERSIONS
 
 already_printed_trainables = False
 
@@ -176,102 +167,6 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_t
     except:
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
-def inject_lora(use_lora, model, replace_modules, is_extended=False, dropout=0.0, lora_path='', r=16):    
-    injector = (
-        inject_trainable_lora if not is_extended 
-    else 
-        inject_trainable_lora_extended
-    )
-
-    params = None
-    negation = None
-
-    if os.path.exists(lora_path):
-        try:
-            for f in os.listdir(lora_path):
-                if f.endswith('.pt'):
-                    lora_file = os.path.join(lora_path, f)
-                    
-                    if 'text_encoder' in f and isinstance(model, CLIPTextModel):
-                        monkeypatch_or_replace_lora(
-                            model,
-                            torch.load(lora_file),
-                            target_replace_module=replace_modules,
-                            r=r
-                        )
-                        print("Successfully loaded Text Encoder LoRa.")
-
-                    if 'unet' in f and isinstance(model, UNet3DConditionModel):
-                        monkeypatch_or_replace_lora_extended(
-                            model,
-                            torch.load(lora_file),
-                            target_replace_module=replace_modules,
-                            r=r
-                        )
-                        print("Successfully loaded UNET LoRa.")
-
-        except Exception as e:
-            print(e)
-            print("Could not load LoRAs. Injecting new ones instead...")
-
-    if use_lora:
-        REPLACE_MODULES = replace_modules
-        injector_args = {
-            "model": model, 
-            "target_replace_module": REPLACE_MODULES,
-            "r": r
-        }
-        if not is_extended: injector_args['dropout_p'] = dropout
-
-        params, negation = injector(**injector_args)   
-        for _up, _down in extract_lora_ups_down(
-            model, 
-            target_replace_module=REPLACE_MODULES):
-
-            if all(x is not None for x in [_up, _down]):
-                print(f"Lora successfully injected into {model.__class__.__name__}.")
-
-            break
-        
-    return params, negation
-
-def save_lora(model, name, condition, replace_modules, step, save_path): 
-    if condition and replace_modules is not None:
-        save_path = f"{save_path}/{step}_{name}.pt"
-        save_lora_weight(model, save_path, replace_modules)
-
-def handle_lora_save(
-    use_unet_lora, 
-    use_text_lora, 
-    model, 
-    save_path, 
-    checkpoint_step, 
-    unet_target_modules, 
-    text_encoder_target_modules
-):
-    
-    save_path = f"{save_path}/lora"
-    os.makedirs(save_path, exist_ok=True)
-
-    save_lora(
-        model.unet, 
-        'unet', 
-        use_unet_lora, 
-        unet_target_modules, 
-        checkpoint_step,
-        save_path, 
-    )
-    save_lora(
-        model.text_encoder, 
-        'text_encoder', 
-        use_text_lora, 
-        text_encoder_target_modules, 
-        checkpoint_step, 
-        save_path
-    )
-
-    train_patch_pipe(model, use_unet_lora, use_text_lora)
-
 def param_optim(model, condition, extra_params=None, is_lora=False, negation=None):
     return {
         "model": model, 
@@ -288,7 +183,6 @@ def create_optim_params(name='param', params=None, lr=5e-6, extra_params=None):
         "params": params, 
         "lr": lr
     }
-
     if extra_params is not None:
         for k, v in extra_params.items():
             params[k] = v
@@ -312,23 +206,30 @@ def create_optimizer_params(model_list, lr):
     for optim in model_list:
         model, condition, extra_params, is_lora, negation = optim.values()
         # Check if we are doing LoRA training.
-        if is_lora and condition: 
+        if is_lora and condition and isinstance(model, list): 
             params = create_optim_params(
                 params=itertools.chain(*model), 
                 extra_params=extra_params
             )
             optimizer_params.append(params)
             continue
+            
+        if is_lora and  condition and not isinstance(model, list):
+            for n, p in model.named_parameters():
+                if 'lora' in n:
+                    params = create_optim_params(n, p, lr, extra_params)
+                    optimizer_params.append(params)
+            continue
 
         # If this is true, we can train it.
         if condition:
             for n, p in model.named_parameters():
-                should_negate = 'lora' in n
+                should_negate = 'lora' in n and not is_lora
                 if should_negate: continue
 
                 params = create_optim_params(n, p, lr, extra_params)
                 optimizer_params.append(params)
-
+    
     return optimizer_params
 
 def get_optimizer(use_8bit_adam):
@@ -463,8 +364,7 @@ def save_pipe(
         text_encoder, 
         vae, 
         output_dir,
-        use_unet_lora,
-        use_text_lora,
+        lora_manager: LoraHandler,
         unet_target_replace_module=None,
         text_target_replace_module=None,
         is_checkpoint=False,
@@ -490,15 +390,7 @@ def save_pipe(
         vae=vae,
     ).to(torch_dtype=torch.float32)
     
-    handle_lora_save(
-        use_unet_lora, 
-        use_text_lora, 
-        pipeline, 
-        output_dir, 
-        global_step,
-        unet_target_replace_module, 
-        text_target_replace_module
-    )
+    lora_manager.save_lora_weights(model=pipeline, save_path=save_path, step=global_step)
 
     pipeline.save_pretrained(save_path)
     
@@ -560,6 +452,10 @@ def main(
     extend_dataset: bool = False,
     cache_latents: bool = False,
     cached_latent_dir = None,
+    lora_version: LORA_VERSIONS = LORA_VERSIONS[0],
+    save_lora_for_webui: bool = False,
+    only_lora_for_webui: bool = False,
+    lora_bias: str = 'none',
     use_unet_lora: bool = False,
     use_text_lora: bool = False,
     unet_lora_modules: Tuple[str] = ["ResnetBlock2D"],
@@ -610,16 +506,24 @@ def main(
     # Initialize the optimizer
     optimizer_cls = get_optimizer(use_8bit_adam)
 
-    # Use LoRA if enabled.    
-    unet_lora_params, unet_negation = inject_lora(
-        use_unet_lora, unet, unet_lora_modules, is_extended=True,
-        r=lora_rank, lora_path=lora_path
-        )
+    # Use LoRA if enabled.  
+    dropout = 0
+    lora_manager = LoraHandler(
+        version=lora_version, 
+        use_unet_lora=use_unet_lora,
+        use_text_lora=use_text_lora,
+        save_for_webui=save_lora_for_webui,
+        only_for_webui=only_lora_for_webui,
+        unet_replace_modules=unet_lora_modules,
+        text_encoder_replace_modules=text_encoder_lora_modules,
+        lora_bias=lora_bias
+    )
 
-    text_encoder_lora_params, text_encoder_negation = inject_lora(
-        use_text_lora, text_encoder, text_encoder_lora_modules,
-        r=lora_rank, lora_path=lora_path
-        )
+    unet_lora_params, unet_negation = lora_manager.add_lora_to_model(
+        use_unet_lora, unet, lora_manager.unet_replace_modules, dropout, lora_path, r=lora_rank) 
+
+    text_encoder_lora_params, text_encoder_negation = lora_manager.add_lora_to_model(
+        use_text_lora, text_encoder, lora_manager.text_encoder_replace_modules, dropout, lora_path, r=lora_rank) 
 
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
     optim_params = [
@@ -627,8 +531,8 @@ def main(
         param_optim(text_encoder, train_text_encoder and not use_text_lora, extra_params=extra_text_encoder_params, 
                     negation=text_encoder_negation
                    ),
-        param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, extra_params={"lr": 1e-5}),
-        param_optim(unet_lora_params, use_unet_lora, is_lora=True, extra_params={"lr": 1e-5})
+        param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, extra_params={"lr": learning_rate}),
+        param_optim(unet_lora_params, use_unet_lora, is_lora=True, extra_params={"lr": learning_rate})
     ]
 
     params = create_optimizer_params(optim_params, learning_rate)
@@ -744,7 +648,7 @@ def main(
     def finetune_unet(batch, train_encoder=False):
         
         # Check if we are training the text encoder
-        text_trainable = (train_text_encoder or use_text_lora)
+        text_trainable = (train_text_encoder or lora_manager.use_text_lora)
         
         # Unfreeze UNET Layers
         if global_step == 0: 
@@ -784,7 +688,7 @@ def main(
         if text_trainable:
             text_encoder.train()
 
-            if use_text_lora: 
+            if lora_manager.use_text_lora: 
                 text_encoder.text_model.embeddings.requires_grad_(True)
 
             if global_step == 0 and train_text_encoder:
@@ -906,8 +810,7 @@ def main(
                         text_encoder, 
                         vae, 
                         output_dir, 
-                        use_unet_lora, 
-                        use_text_lora,
+                        lora_manager,
                         unet_lora_modules,
                         text_encoder_lora_modules,
                         is_checkpoint=True
@@ -916,12 +819,13 @@ def main(
                 if should_sample(global_step, validation_steps, validation_data):
                     if global_step == 1: print("Performing validation prompt.")
                     if accelerator.is_main_process:
-
+                        
                         with accelerator.autocast():
                             unet.eval()
                             text_encoder.eval()
                             unet_and_text_g_c(unet, text_encoder, False, False)
-                            
+                            lora_manager.deactivate_lora_train([unet, text_encoder], True)    
+
                             pipeline = TextToVideoSDPipeline.from_pretrained(
                                 pretrained_model_path,
                                 text_encoder=text_encoder,
@@ -962,6 +866,8 @@ def main(
                         text_encoder_gradient_checkpointing
                     )
 
+                    lora_manager.deactivate_lora_train([unet, text_encoder], False)    
+
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             accelerator.log({"training_loss": loss.detach().item()}, step=step)
             progress_bar.set_postfix(**logs)
@@ -980,8 +886,7 @@ def main(
                 text_encoder, 
                 vae, 
                 output_dir, 
-                use_unet_lora, 
-                use_text_lora,
+                lora_manager,
                 unet_lora_modules,
                 text_encoder_lora_modules,
                 is_checkpoint=False

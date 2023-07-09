@@ -169,7 +169,7 @@ for j in range(2):
     unet_conversion_map_layer.append((sd_mid_res_prefix, hf_mid_res_prefix))
 
 # The pipeline
-def convert_unet_state_dict(unet_state_dict):
+def convert_unet_state_dict(unet_state_dict, strict_mapping=False):
     print ('Converting the UNET')
     # buyer beware: this is a *brittle* function,
     # and correct output requires that all of these pieces interact in
@@ -177,7 +177,11 @@ def convert_unet_state_dict(unet_state_dict):
     mapping = {k: k for k in unet_state_dict.keys()}
 
     for sd_name, hf_name in unet_conversion_map:
-        mapping[hf_name] = sd_name
+        if strict_mapping:
+            if hf_name in mapping:
+                mapping[hf_name] = sd_name
+        else:
+            mapping[hf_name] = sd_name
     for k, v in mapping.items():
         if "resnets" in k:
             for sd_part, hf_part in unet_conversion_map_resnet:
