@@ -9,6 +9,7 @@ import json
 
 from torch.utils.data import ConcatDataset
 from transformers import CLIPTokenizer
+from .convert_to_compvis import convert_unet_state_dict, convert_text_enc_state_dict
 
 try:
     from safetensors.torch import save_file, safe_open
@@ -66,6 +67,65 @@ def find_modules(
                     # Otherwise, yield it
                     yield parent, name, module
 
+class Conv2d(nn.Conv2d, LoRALayer):
+    # LoRA implemented in a dense layer
+    def __init__(
+        self, 
+        in_channels: int, 
+        out_channels: int,
+        kernel_size: int,
+        r: int = 0, 
+        lora_alpha: int = 1, 
+        lora_dropout: float = 0.,
+        merge_weights: bool = True,
+        **kwargs
+    ):
+        nn.Conv2d.__init__(self, in_channels, out_channels, kernel_size, **kwargs)
+        LoRALayer.__init__(self, r=r, lora_alpha=lora_alpha, lora_dropout=lora_dropout,
+                           merge_weights=merge_weights)
+        assert type(kernel_size) is int
+        # Actual trainable parameters
+        if r > 0:
+            self.lora_A = nn.Parameter(
+                self.weight.new_zeros((r*kernel_size, in_channels*kernel_size))
+            )
+            self.lora_B = nn.Parameter(
+                self.weight.new_zeros((out_channels*kernel_size, r*kernel_size))
+            )
+            self.scaling = self.lora_alpha / self.r
+            # Freezing the pre-trained weight matrix
+            self.weight.requires_grad = False
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.Conv2d.reset_parameters(self)
+        if hasattr(self, 'lora_A'):
+            # initialize A the same way as the default for nn.Linear and B to zero
+            nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
+            nn.init.zeros_(self.lora_B)
+
+    def train(self, mode: bool = True):
+        nn.Conv2d.train(self, mode)
+        if mode:
+            if self.merge_weights and self.merged:
+                # Make sure that the weights are not merged
+                self.weight.data -= (self.lora_B @ self.lora_A).view(self.weight.shape) * self.scaling
+                self.merged = False
+        else:
+            if self.merge_weights and not self.merged:
+                # Merge the weights and mark it
+                self.weight.data += (self.lora_B @ self.lora_A).view(self.weight.shape) * self.scaling
+                self.merged = True
+
+    def forward(self, x: torch.Tensor):
+        if self.r > 0 and not self.merged:
+            return F.conv2d(
+                x, 
+                self.weight + (self.lora_B @ self.lora_A).view(self.weight.shape) * self.scaling,
+                self.bias, self.stride, self.padding, self.dilation, self.groups
+            )
+        return nn.Conv2d.forward(self, x)
+
 class Conv3d(nn.Conv3d, LoRALayer):
     # LoRA implemented in a dense layer
     def __init__(
@@ -84,12 +144,17 @@ class Conv3d(nn.Conv3d, LoRALayer):
                            merge_weights=merge_weights)
         assert type(kernel_size) is int
         # Actual trainable parameters
+
+        # Get view transform shape
+        i, o, k = self.weight.shape[:3]
+        self.view_shape = (i, o, k, kernel_size, 1)
+
         if r > 0:
             self.lora_A = nn.Parameter(
-                self.weight.new_zeros((r*kernel_size, in_channels*kernel_size, kernel_size))
+                self.weight.new_zeros((r*kernel_size, in_channels*kernel_size))
             )
             self.lora_B = nn.Parameter(
-                self.weight.new_zeros((kernel_size, out_channels*kernel_size, r*kernel_size))
+                self.weight.new_zeros((out_channels*kernel_size, r*kernel_size))
             )
             self.scaling = self.lora_alpha / self.r
             # Freezing the pre-trained weight matrix
@@ -120,10 +185,51 @@ class Conv3d(nn.Conv3d, LoRALayer):
         if self.r > 0 and not self.merged:
             return F.conv3d(
                 x, 
-                self.weight + (self.lora_B.transpose(0,1) @ self.lora_A.transpose(0,1)).view(self.weight.shape) * self.scaling,
-                self.bias, self.stride, self.padding, self.dilation, self.groups
+                self.weight + torch.mean((self.lora_B @ self.lora_A).view(self.view_shape), dim=-2,  keepdim=True) * \
+                    self.scaling, self.bias, self.stride, self.padding, self.dilation, self.groups
             )
-        return nn.Conv2d.forward(self, x)
+        return nn.Conv3d.forward(self, x)
+
+def process_lora_metadata_dict(dataset):
+    keys_to_exclude = [
+        "center_crop", 
+        "color_jitter", 
+        "h_flip", 
+        "instance_data_root",
+        "instance_images_path",
+        "class_images_path",
+        "class_data_root",
+        "dataset_norm",
+        "image_transforms",
+        "_length",
+        "resize",
+        "normalized_mean_std"
+    ]
+    return {
+        k: str(v) for k, v in dataset.items() \
+            if (k not in keys_to_exclude and \
+                not isinstance(v, CLIPTokenizer))
+        }
+
+def create_lora_metadata(lora_name, train_dataset):
+    import uuid
+    is_concat_dataset = isinstance(train_dataset, ConcatDataset)
+    dataset = (
+        train_dataset.__dict__ if not is_concat_dataset
+            else 
+        [d.__dict__ for d in train_dataset.datasets]
+    )   
+    if is_concat_dataset:
+        dataset = [process_lora_metadata_dict(x) for x in dataset]
+    else:
+        dataset = process_lora_metadata_dict(dataset)
+    
+    metadata = {
+        "stable_lora": "v1", 
+        "lora_name": lora_name + "_" + uuid.uuid4().hex.lower()[:5],
+        "train_dataset": json.dumps(dataset, indent=4)
+    }
+    return metadata
 
 def create_lora_linear(child_module, r, dropout=0, bias=False, scale=0):
     return loralb.Linear(
@@ -138,11 +244,12 @@ def create_lora_linear(child_module, r, dropout=0, bias=False, scale=0):
     return lora_linear
 
 def create_lora_conv(child_module, r, dropout=0, bias=False, rescale=False, scale=0):
-    return loralb.Conv2d(
+    return Conv2d(
         child_module.in_channels, 
         child_module.out_channels,
         kernel_size=child_module.kernel_size[0],
         padding=child_module.padding,
+        stride=child_module.stride,
         merge_weights=False,
         bias=bias,
         lora_dropout=dropout,
@@ -196,6 +303,11 @@ def add_lora_to(
         search_class=search_class
     ):
         bias = hasattr(child_module, "bias")
+        
+        # Check if child module of the model has bias.
+        if bias:
+            if child_module.bias is None:
+                bias = False
 
         # Check if the child module of the model is type Linear or Conv2d.
         if isinstance(child_module, torch.nn.Linear):
@@ -210,7 +322,7 @@ def add_lora_to(
         if isinstance(child_module, torch.nn.Embedding):
             l = create_lora_emb(child_module, r)
             
-        # Check if child module of the model has bias.
+        # If the model has bias and we wish to add it, use the child_modules in place
         if bias:
             l.bias = child_module.bias
         
