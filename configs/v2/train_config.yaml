@@ -71,6 +71,15 @@ text_encoder_lora_modules:
 # VRAM increases with higher rank, lower when decreased.
 lora_rank: 16
 
+# Enables the ability to do masked training. Advanced usage.
+# This enables the ability to sample multiple minutes of video.
+# Example
+# generation_frames_1: 8 frames
+# generation_frames_2: (Last 3 frames from generation_frames_1 + 5) + ((8 + 3) - last generation frames (3))
+# Continue for N amount of generation frames.
+# Combine and save.  
+enable_masked_train: False
+
 # Training data parameters
 train_data:
 

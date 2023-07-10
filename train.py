@@ -484,6 +484,14 @@ def enforce_zero_terminal_snr(betas):
 
     return betas
 
+
+def masked_training(noisy_latents, noise, video_length, enable_masked_train=False):
+    if enable_masked_train:
+        stop = random.randint(1, video_length // 2)    
+        mask = torch.zeros_like(noisy_latents)
+        mask[:, :, :stop, ...] = 1
+        noisy_latents = noisy_latents * mask + (1. - mask) * noise
+
 def should_sample(global_step, validation_steps, validation_data):
     return (global_step % validation_steps == 0 or global_step == 1)  \
     and validation_data.sample_preview
@@ -600,6 +608,7 @@ def main(
     text_encoder_lora_modules: Tuple[str] = ["CLIPEncoderLayer"],
     lora_rank: int = 16,
     lora_path: str = '',
+    enable_masked_train: bool = False,
     logger: str = 'tensorboard',
     **kwargs
 ):
@@ -877,6 +886,9 @@ def main(
             encoder_hidden_states = (
                 detached_encoder_state if should_detach else trainable_encoder_state
             )
+
+            do_masked_training = should_detach and enable_masked_train
+            masked_training(noisy_latents, noise, video_length, enable_masked_train=do_masked_training)
 
             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states=encoder_hidden_states).sample
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
