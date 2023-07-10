@@ -299,6 +299,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
                     in_channels // attn_num_head_channels,
                     attn_num_head_channels,
                     in_channels=in_channels,
+                    dropout=0.1,
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
                     norm_num_groups=resnet_groups,
@@ -457,6 +458,7 @@ class CrossAttnDownBlock3D(nn.Module):
                     out_channels // attn_num_head_channels,
                     attn_num_head_channels,
                     in_channels=out_channels,
+                    dropout=0.1,
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
                     norm_num_groups=resnet_groups,
@@ -689,6 +691,7 @@ class CrossAttnUpBlock3D(nn.Module):
                 TransformerTemporalModel(
                     out_channels // attn_num_head_channels,
                     attn_num_head_channels,
+                    dropout=0.1,
                     in_channels=out_channels,
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
