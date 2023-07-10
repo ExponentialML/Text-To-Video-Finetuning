@@ -442,7 +442,7 @@ def tensor_to_vae_latent(t, vae):
 
     return latents
 
-def sample_noise(latents, noise_strength, use_offset_noise):
+def sample_noise(latents, noise_strength, use_offset_noise=False):
     b ,c, f, *_ = latents.shape
     noise_latents = torch.randn_like(latents, device=latents.device)
     offset_noise = None
@@ -452,6 +452,37 @@ def sample_noise(latents, noise_strength, use_offset_noise):
         noise_latents = noise_latents + noise_strength * offset_noise
 
     return noise_latents
+
+def enforce_zero_terminal_snr(betas):
+    """
+    Corrects noise in diffusion schedulers.
+    From: Common Diffusion Noise Schedules and Sample Steps are Flawed
+    https://arxiv.org/pdf/2305.08891.pdf
+    """
+    # Convert betas to alphas_bar_sqrt
+    alphas = 1 - betas
+    alphas_bar = alphas.cumprod(0)
+    alphas_bar_sqrt = alphas_bar.sqrt()
+
+    # Store old values.
+    alphas_bar_sqrt_0 = alphas_bar_sqrt[0].clone()
+    alphas_bar_sqrt_T = alphas_bar_sqrt[-1].clone()
+
+    # Shift so the last timestep is zero.
+    alphas_bar_sqrt -= alphas_bar_sqrt_T
+
+    # Scale so the first timestep is back to the old value.
+    alphas_bar_sqrt *= alphas_bar_sqrt_0 / (
+        alphas_bar_sqrt_0 - alphas_bar_sqrt_T
+    )
+
+    # Convert alphas_bar_sqrt to betas
+    alphas_bar = alphas_bar_sqrt ** 2
+    alphas = alphas_bar[1:] / alphas_bar[:-1]
+    alphas = torch.cat([alphas_bar[0:1], alphas])
+    betas = 1 - alphas
+
+    return betas
 
 def should_sample(global_step, validation_steps, validation_data):
     return (global_step % validation_steps == 0 or global_step == 1)  \
@@ -558,6 +589,7 @@ def main(
     seed: Optional[int] = None,
     train_text_encoder: bool = False,
     use_offset_noise: bool = False,
+    rescale_schedule: bool = False,
     offset_noise_strength: float = 0.1,
     extend_dataset: bool = False,
     cache_latents: bool = False,
@@ -715,6 +747,10 @@ def main(
     models_to_cast = [text_encoder, vae]
     cast_to_gpu_and_type(models_to_cast, accelerator, weight_dtype)
 
+    # Fix noise schedules to predcit light and dark areas if available.
+    if not use_offset_noise and rescale_schedule:
+        noise_scheduler.betas = enforce_zero_terminal_snr(noise_scheduler.betas)
+
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
 
@@ -771,6 +807,7 @@ def main(
         video_length = latents.shape[2]
 
         # Sample noise that we'll add to the latents
+        use_offset_noise = use_offset_noise and not rescale_schedule
         noise = sample_noise(latents, offset_noise_strength, use_offset_noise)
         bsz = latents.shape[0]
 
