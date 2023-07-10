@@ -18,10 +18,12 @@ dataset_types:
   - 'single_video'
 
 # Adds offset noise to training. See https://www.crosslabs.org/blog/diffusion-with-offset-noise
+# If this is enabled, rescale_schedule will be disabled.
 offset_noise_strength: 0.1
 use_offset_noise: False
 
 # Uses schedule rescale, also known as the "better" offset noise. See https://arxiv.org/pdf/2305.08891.pdf
+# If this is enabled, offset noise will be disabled.
 rescale_schedule: False
 
 # When True, this extends all items in all enabled datasets to the highest length. 
