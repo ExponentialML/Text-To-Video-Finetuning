@@ -21,6 +21,9 @@ dataset_types:
 offset_noise_strength: 0.1
 use_offset_noise: False
 
+# Uses schedule rescale, also known as the "better" offset noise. See https://arxiv.org/pdf/2305.08891.pdf
+rescale_schedule: False
+
 # When True, this extends all items in all enabled datasets to the highest length. 
 # For example, if you have 200 videos and 10 images, 10 images will be duplicated to the length of 200. 
 extend_dataset: False
