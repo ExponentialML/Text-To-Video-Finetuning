@@ -163,16 +163,18 @@ def set_torch_2_attn(unet):
 def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_torch_2_attn, unet): 
     try:
         is_torch_2 = hasattr(F, 'scaled_dot_product_attention')
-
-        if enable_xformers_memory_efficient_attention and not is_torch_2:
+        enable_torch_2 = is_torch_2 and enable_torch_2_attn
+        
+        if enable_xformers_memory_efficient_attention and not enable_torch_2:
             if is_xformers_available():
                 from xformers.ops import MemoryEfficientAttentionFlashAttentionOp
                 unet.enable_xformers_memory_efficient_attention(attention_op=MemoryEfficientAttentionFlashAttentionOp)
             else:
                 raise ValueError("xformers is not available. Make sure it is installed correctly")
         
-        if enable_torch_2_attn and is_torch_2:
+        if enable_torch_2:
             set_torch_2_attn(unet)
+            
     except:
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
