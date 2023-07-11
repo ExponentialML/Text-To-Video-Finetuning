@@ -290,14 +290,14 @@ class LoraHandler(object):
     ):
         import uuid
 
-        save_filename = f"{step}_{name}"
+        save_filename = f"{step}_{name}{LORA_FILE_TYPES[-1]}"
         lora_metadata =  metadata = {
         "stable_lora_text_to_video": "v1", 
         "lora_name": name + "_" + uuid.uuid4().hex.lower()[:5]
     }
         save_lora(
-            model.unet,
-            model.text_encoder,
+            unet=model.unet,
+            text_encoder=model.text_encoder,
             save_text_weights=self.use_text_lora,
             output_dir=save_path,
             lora_filename=save_filename,
