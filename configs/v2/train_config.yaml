@@ -72,9 +72,11 @@ save_lora_for_webui: True
 # when this version is set to False
 only_lora_for_webui: False
 
+# Choose whether or not ito save the full pretrained model weights for both checkpoints and after training.
+# The only time you want this off is if you're doing full LoRA training.
+save_pretrained_model: True
+
 # The modules to use for LoRA. Different from 'trainable_modules'.
-
-
 unet_lora_modules:
   - "UNet3DConditionModel"
   #- "ResnetBlock2D"

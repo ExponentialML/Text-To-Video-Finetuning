@@ -401,6 +401,7 @@ def save_pipe(
         unet_target_replace_module=None,
         text_target_replace_module=None,
         is_checkpoint=False,
+        save_pretrained_model=True
     ):
 
     if is_checkpoint:
@@ -424,6 +425,9 @@ def save_pipe(
     ).to(torch_dtype=torch.float32)
     
     lora_manager.save_lora_weights(model=pipeline, save_path=save_path, step=global_step)
+
+    if save_pretrained_model:
+        pipeline.save_pretrained(save_path)
 
     pipeline.save_pretrained(save_path)
     
@@ -494,6 +498,7 @@ def main(
     use_text_lora: bool = False,
     unet_lora_modules: Tuple[str] = ["ResnetBlock2D"],
     text_encoder_lora_modules: Tuple[str] = ["CLIPEncoderLayer"],
+    save_pretrained_model: bool = True,
     lora_rank: int = 16,
     lora_path: str = '',
     logger: str = 'tensorboard',
