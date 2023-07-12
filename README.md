@@ -4,6 +4,7 @@
 [output.webm](https://user-images.githubusercontent.com/59846140/230748413-fe91e90b-94b9-49ea-97ec-250469ee9472.webm)
 
 ### Updates
+- **2023-7-12**: You can now train a LoRA that is compatibile with the [webui extension](https://github.com/kabachuha/sd-webui-text2video)! See instructions [here.](https://github.com/ExponentialML/Text-To-Video-Finetuning/edit/feat/stable_lora/README.md#training-a-lora)
 - **2023-4-17**: You can now convert your trained models from diffusers to `.ckpt` format for A111 webui. Thanks @kabachuha!  
 - **2023-4-8**: LoRA Training released! Checkout `configs/v2/lora_training_config.yaml` for instructions. 
 - **2023-4-8**: Version 2 is released! 
@@ -46,14 +47,12 @@ It is **highly recommended** to install >= Torch 2.0. This way, you don't have t
 
 If you don't have Xformers enabled, you can follow the instructions here: https://github.com/facebookresearch/xformers
 
-
 Recommended to use a RTX 3090, but you should be able to train on GPUs with <= 16GB ram with:
 - Validation turned off.
 - Xformers or Torch 2.0 Scaled Dot-Product Attention 
 - Gradient checkpointing enabled. 
 - Resolution of 256.
 - Enable all LoRA options.
-
 
 ## Running inference
 The `inference.py` script can be used to render videos with trained checkpoints.
@@ -163,6 +162,18 @@ I highly recommend (I did this myself) going to `configs/v2/train_config.yaml`. 
 Then, follow each line and configure it for your specific use case. 
 
 The instructions should be clear enough to get you up and running with your dataset, but feel free to ask any questions in the discussion board.
+
+## Training a LoRA
+You can also train a LoRA that is both compatible with the webui extension.. By default it's set to 'cloneofsimo', which was the first LoRA implementation for Stable Diffusion.
+This version you can use in the `inference.py` file in this repository. It is **not** compatible with the webui.
+
+To use a LoRA with the webui, change the `lora_version` to "stable_lora" in your config. This will train an [A1111 webui extension](https://github.com/kabachuha/sd-webui-text2video) compatibile LoRA.
+You can get started at `configs/v2/stable_lora_config.yaml` and edit it from there. During and after training, LoRAs will be saved in your outputs directory with the prefix `_webui`.
+
+### What you cannot do:
+- Use LoRA files that were made for SD image models in other trainers.
+- Use 'cloneofsimo' LoRAs in another project (unless you build it or create a PR)
+- Merge LoRA weights together (yet).
 
 ## Finetune.
 ```python
