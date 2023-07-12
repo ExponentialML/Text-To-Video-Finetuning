@@ -499,6 +499,8 @@ def main(
     save_pretrained_model: bool = True,
     lora_rank: int = 16,
     lora_path: str = '',
+    lora_unet_dropout: float = 0.1,
+    lora_text_dropout: float = 0.1,
     logger: str = 'tensorboard',
     **kwargs
 ):
@@ -544,7 +546,6 @@ def main(
     optimizer_cls = get_optimizer(use_8bit_adam)
 
     # Use LoRA if enabled.  
-    dropout = 0
     lora_manager = LoraHandler(
         version=lora_version, 
         use_unet_lora=use_unet_lora,
@@ -557,10 +558,10 @@ def main(
     )
 
     unet_lora_params, unet_negation = lora_manager.add_lora_to_model(
-        use_unet_lora, unet, lora_manager.unet_replace_modules, dropout, lora_path, r=lora_rank) 
+        use_unet_lora, unet, lora_manager.unet_replace_modules, lora_unet_dropout, lora_path, r=lora_rank) 
 
     text_encoder_lora_params, text_encoder_negation = lora_manager.add_lora_to_model(
-        use_text_lora, text_encoder, lora_manager.text_encoder_replace_modules, dropout, lora_path, r=lora_rank) 
+        use_text_lora, text_encoder, lora_manager.text_encoder_replace_modules, lora_text_dropout, lora_path, r=lora_rank) 
 
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
     optim_params = [
@@ -575,7 +576,7 @@ def main(
                         extra_params={**{"lr": learning_rate}, **extra_text_encoder_params}
                     )
     ]
-    
+
     params = create_optimizer_params(optim_params, learning_rate)
     
     # Create Optimizer
