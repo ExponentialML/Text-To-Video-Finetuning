@@ -1,7 +1,17 @@
+<div align="center" width="100" height="100" >
+  <img src="https://github.com/ExponentialML/Text-To-Video-Finetuning/assets/59846140/184f0dce-b77a-45d7-b24d-1814e5b9c314" />
+  <div align="center" style="font-style: italic;" >
+    <i>Video Credit: dotsimulate</i>
+  </div>
+  <div align="center" style="font-style: italic;" >
+    <i>Model: Zeroscope XL</i>
+  </div>
+</div>
+
+
+
 # Text-To-Video-Finetuning
 ## Finetune ModelScope's Text To Video model using Diffusers 🧨 
-
-[output.webm](https://user-images.githubusercontent.com/59846140/230748413-fe91e90b-94b9-49ea-97ec-250469ee9472.webm)
 
 ### Updates
 - **2023-7-12**: You can now train a LoRA that is compatibile with the [webui extension](https://github.com/kabachuha/sd-webui-text2video)! See instructions [here.](https://github.com/ExponentialML/Text-To-Video-Finetuning/edit/feat/stable_lora/README.md#training-a-lora)
@@ -21,6 +31,15 @@ cd Text-To-Video-Finetuning
 git lfs install
 git clone https://huggingface.co/damo-vilab/text-to-video-ms-1.7b ./models/model_scope_diffusers/
 ```
+
+## Other Models
+Alternatively, you can train starting from other models made by the community.
+
+| Contributer    |Model Name    | Link                                                |
+| -------------- | ------------ | --------------------------------------------------- | 
+| cerspense      | ZeroScope    | https://huggingface.co/cerspense/zeroscope_v2_576w  |
+| cameduru       | Potat1       | https://huggingface.co/camenduru/potat1             |
+| strangeman3107 | animov-512x  | https://huggingface.co/strangeman3107/animov-512x   |
 
 ### Create Conda Environment (Optional)
 It is recommended to install Anaconda.
@@ -52,7 +71,8 @@ Recommended to use a RTX 3090, but you should be able to train on GPUs with <= 1
 - Xformers or Torch 2.0 Scaled Dot-Product Attention 
 - Gradient checkpointing enabled. 
 - Resolution of 256.
-- Enable all LoRA options.
+- Hybrid LoRA training.
+- Training only using LoRA with ranks between 4-16.
 
 ## Running inference
 The `inference.py` script can be used to render videos with trained checkpoints.
