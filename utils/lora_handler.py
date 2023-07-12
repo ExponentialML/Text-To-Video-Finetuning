@@ -313,7 +313,7 @@ class LoraHandler(object):
     ):
         import uuid
 
-        save_filename = f"{step}_{name}.{LORA_FILE_TYPES[-1]}"
+        save_filename = f"{step}_{name}"
         lora_metadata =  metadata = {
         "stable_lora_text_to_video": "v1", 
         "lora_name": name + "_" + uuid.uuid4().hex.lower()[:5]
