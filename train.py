@@ -780,6 +780,8 @@ def main(
     progress_bar.set_description("Steps")
 
     def finetune_unet(batch, train_encoder=False):
+        nonlocal use_offset_noise
+        nonlocal rescale_schedule
         
         # Check if we are training the text encoder
         text_trainable = (train_text_encoder or use_text_lora)
