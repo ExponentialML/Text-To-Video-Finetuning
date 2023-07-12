@@ -14,7 +14,7 @@
 ## Finetune ModelScope's Text To Video model using Diffusers 🧨 
 
 ### Updates
-- **2023-7-12**: You can now train a LoRA that is compatibile with the [webui extension](https://github.com/kabachuha/sd-webui-text2video)! See instructions [here.](https://github.com/ExponentialML/Text-To-Video-Finetuning/edit/feat/stable_lora/README.md#training-a-lora)
+- **2023-7-12**: You can now train a LoRA that is compatibile with the [webui extension](https://github.com/kabachuha/sd-webui-text2video)! See instructions [here.](https://github.com/ExponentialML/Text-To-Video-Finetuning#training-a-lora)
 - **2023-4-17**: You can now convert your trained models from diffusers to `.ckpt` format for A111 webui. Thanks @kabachuha!  
 - **2023-4-8**: LoRA Training released! Checkout `configs/v2/lora_training_config.yaml` for instructions. 
 - **2023-4-8**: Version 2 is released! 
