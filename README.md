@@ -184,11 +184,17 @@ Then, follow each line and configure it for your specific use case.
 The instructions should be clear enough to get you up and running with your dataset, but feel free to ask any questions in the discussion board.
 
 ## Training a LoRA
-You can also train a LoRA that is both compatible with the webui extension.. By default it's set to 'cloneofsimo', which was the first LoRA implementation for Stable Diffusion.
+
+***Please read this section carefully if you are training a LoRA model***
+You can also train a LoRA that is both compatible with the webui extension. By default it's set to `'cloneofsimo'`, which was the first LoRA implementation for Stable Diffusion.
 This version you can use in the `inference.py` file in this repository. It is **not** compatible with the webui.
 
-To use a LoRA with the webui, change the `lora_version` to "stable_lora" in your config. This will train an [A1111 webui extension](https://github.com/kabachuha/sd-webui-text2video) compatibile LoRA.
+To train and ***use*** a LoRA with the webui, change the `lora_version` to **"stable_lora"** in your config. This will train an [A1111 webui extension](https://github.com/kabachuha/sd-webui-text2video) compatibile LoRA.
 You can get started at `configs/v2/stable_lora_config.yaml` and edit it from there. During and after training, LoRAs will be saved in your outputs directory with the prefix `_webui`.
+
+If you do not choose this setting, you *will not* currently be able to use these in the webui. If you train a Stable LoRA file, you cannot *currently* use them in `inference.py`.
+
+To continue training a LoRA, simply set your `lora_path` in your config to the **directory** that contains your LoRA file, not an individual one. You should then be able to resume training from a LoRA model, regardless of which method you use (as long as the trained LoRA matches the version in the config).
 
 ### What you cannot do:
 - Use LoRA files that were made for SD image models in other trainers.
