@@ -502,7 +502,7 @@ def main(
     lora_path: str = '',
     lora_unet_dropout: float = 0.1,
     lora_text_dropout: float = 0.1,
-    logger: str = 'tensorboard',
+    logger_type: str = 'tensorboard',
     **kwargs
 ):
 
@@ -511,7 +511,7 @@ def main(
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
         mixed_precision=mixed_precision,
-        log_with=logger,
+        log_with=logger_type,
         project_dir=output_dir
     )
 
@@ -696,6 +696,8 @@ def main(
     progress_bar.set_description("Steps")
 
     def finetune_unet(batch, train_encoder=False):
+        nonlocal use_offset_noise
+        nonlocal rescale_schedule
         
         # Check if we are training the text encoder
         text_trainable = (train_text_encoder or lora_manager.use_text_lora)
