@@ -1,7 +1,7 @@
 import os
 from logging import warnings
 import torch
-from typing import Literal, Union
+from typing import Union
 from types import SimpleNamespace
 from models.unet_3d_condition import UNet3DConditionModel
 from transformers import CLIPTextModel
