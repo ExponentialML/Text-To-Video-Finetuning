@@ -326,8 +326,10 @@ def save_lora(
         if not only_webui:
             for i, model in enumerate([unet, text_encoder]):
                 if save_text_weights and i == 1:
-                    save_path_full_weights = save_path_full_weights.replace(ext, f"_text{ext}")
-                    
+                    save_path_full_weights = save_path_full_weights.replace(ext, f"_text_encoder{ext}")
+
+                else:
+                    save_path_full_weights = save_path_full_weights.replace(ext, f"_unet{ext}")
                 # Load only the LoRAs from the state dict.
                 lora_dict = loralb.lora_state_dict(model, bias=lora_bias)
                 

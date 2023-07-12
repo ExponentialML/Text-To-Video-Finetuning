@@ -119,36 +119,52 @@ class LoraHandler(object):
                 
         assert "LoRA Version does not exist."
 
-    def handle_lora_load(self, file_name, lora_loader_args: dict = None):
-        lora_activators = []
-        for basename in FILE_BASENAMES:
-            self.lora_loader(**lora_loader_args)
-            print(f"Successfully loaded LoRA for {basename}")
+    def check_lora_ext(self, lora_file: str):
+        return lora_file.endswith(tuple(LORA_FILE_TYPES))
 
-    def load_lora(
+    def get_lora_file_path(
         self, 
-        model: Union[CLIPTextModel, UNet3DConditionModel], 
-        lora_path: str = '',
-        lora_loader_args: dict = None,
+        lora_path: str, 
+        model: Union[UNet3DConditionModel, CLIPTextModel]
     ):
-        try:
-            if os.path.exists(lora_path):
-                for lora_file in os.listdir(lora_path):
-                    if lora_file.endswith(tuple(LORA_FILE_TYPES)):
-                        lora_file = os.path.join(lora_path, lora_file)
+        if os.path.exists(lora_path):
+            lora_filenames = [fns for fns in os.listdir(lora_path)]
+            is_lora = self.check_lora_ext(lora_path)
 
-                        if self.is_cloneofsimo_lora():
-                            lora_loader_args.update({"loras": lora_file})
+            is_unet = isinstance(model, UNet3DConditionModel)
+            is_text =  isinstance(model, CLIPTextModel)
+            idx = 0 if is_unet else 1
 
-                        if self.is_stable_lora():
-                            lora_loader_args.update({"lora_path": lora_file})
-                        
-                        return self.handle_lora_load(lora_file, lora_loader_args)
-    
-        except Exception as e:
-            print(e)
-            print("Could not load LoRAs. Injecting new ones instead...")
+            base_name = FILE_BASENAMES[idx]
             
+            for lora_filename in lora_filenames:
+                is_lora = self.check_lora_ext(lora_filename)
+                if not is_lora:
+                    continue
+                
+                if base_name in lora_filename:
+                    return os.path.join(lora_path, lora_filename)
+
+        return None
+
+    def handle_lora_load(self, file_name:str, lora_loader_args: dict = None):
+        self.lora_loader(**lora_loader_args)
+        print(f"Successfully loaded LoRA from: {file_name}")
+    
+    def load_lora(self, model, lora_path: str = '', lora_loader_args: dict = None,):
+        try:
+            lora_file = self.get_lora_file_path(lora_path, model)
+
+            if lora_file is not None:
+                lora_loader_args.update({"lora_path": lora_file})
+                self.handle_lora_load(lora_file, lora_loader_args)
+
+            else:
+                print(f"Could not load LoRAs for {model.__class__.__name__}. Injecting new ones instead...")
+
+        except Exception as e:
+            print(f"An error occured while loading a LoRA file: {e}")
+                 
     def get_lora_func_args(self, lora_path, use_lora, model, replace_modules, r, dropout, lora_bias):
         return_dict = lora_args.copy()
     
@@ -156,6 +172,7 @@ class LoraHandler(object):
             return_dict = filter_dict(return_dict, keys=CLONE_OF_SIMO_KEYS)
             return_dict.update({
                 "model": model,
+                "loras": self.get_lora_file_path(lora_path, model),
                 "target_replace_module": replace_modules,
                 "r": r
             })
@@ -171,17 +188,20 @@ class LoraHandler(object):
     def do_lora_injection(
         self, 
         model, 
-        replace_modules, bias='none',
+        replace_modules, 
+        bias='none',
         dropout=0,
         r=4,
         lora_loader_args=None,
-    ):
-        params = None
-        negation = None
+    ):  
         REPLACE_MODULES = replace_modules
 
+        params = None
+        negation = None
+        is_injection_hybrid = False
+        
         if self.is_cloneofsimo_lora():
-            
+            is_injection_hybrid = True
             injector_args = lora_loader_args
 
             params, negation = self.lora_injector(**injector_args)   
@@ -194,7 +214,7 @@ class LoraHandler(object):
 
                 break
 
-            return params, negation
+            return params, negation, is_injection_hybrid
 
         if self.is_stable_lora():
             injector_args = lora_args.copy()
@@ -214,7 +234,7 @@ class LoraHandler(object):
             activator = self.lora_injector(**injector_args)
             activator()
 
-        return params, negation
+        return params, negation, is_injection_hybrid
 
     def add_lora_to_model(self, use_lora, model, replace_modules, dropout=0.0, lora_path='', r=16):
 
@@ -232,7 +252,7 @@ class LoraHandler(object):
         )
 
         if use_lora:
-            params, negation = self.do_lora_injection(
+            params, negation, is_injection_hybrid = self.do_lora_injection(
                 model, 
                 replace_modules, 
                 bias=self.lora_bias,
@@ -240,7 +260,9 @@ class LoraHandler(object):
                 dropout=dropout,
                 r=r
             )
-            self.load_lora(model, lora_path=lora_path, lora_loader_args=lora_loader_args)
+
+            if not is_injection_hybrid:
+                self.load_lora(model, lora_path=lora_path, lora_loader_args=lora_loader_args)
         
         params = model if params is None else params
         return params, negation
@@ -254,19 +276,31 @@ class LoraHandler(object):
         if self.is_stable_lora():
             set_mode_group(models, not deactivate)
 
-    def save_cloneofsimo_lora(self, model, save_path, step, name, replace_modules):
-        conditions = [self.use_unet_lora, self.use_text_lora]
-        models = [model.unet, model.text_encoder]
-        replace_modules = [self.unet_replace_modules, self.text_encoder_replace_modules]
-
-        for model in models:
-            for i, condition in enumerate(conditions):
-                replace_modules = replace_modules[i]
-                name = 'text_encoder' if i == 1 else 'unet'
+    def save_cloneofsimo_lora(self, model, save_path, step):
+        
+        def save_lora(model, name, condition, replace_modules, step, save_path): 
+            if condition and replace_modules is not None:
                 save_path = f"{save_path}/{step}_{name}.pt"
                 save_lora_weight(model, save_path, replace_modules)
 
-            train_patch_pipe(model, conditions[0], [conditions[1]])
+        save_lora(
+            model.unet, 
+            FILE_BASENAMES[0], 
+            self.use_unet_lora, 
+            self.unet_replace_modules, 
+            step,
+            save_path, 
+        )
+        save_lora(
+            model.text_encoder, 
+            FILE_BASENAMES[1], 
+            self.use_text_lora, 
+            self.text_encoder_replace_modules, 
+            step, 
+            save_path
+        )
+
+        train_patch_pipe(model, self.use_unet_lora, self.use_text_lora)
 
     def save_stable_lora(
         self, 
@@ -279,7 +313,7 @@ class LoraHandler(object):
     ):
         import uuid
 
-        save_filename = f"{step}_{name}{LORA_FILE_TYPES[-1]}"
+        save_filename = f"{step}_{name}.{LORA_FILE_TYPES[-1]}"
         lora_metadata =  metadata = {
         "stable_lora_text_to_video": "v1", 
         "lora_name": name + "_" + uuid.uuid4().hex.lower()[:5]
@@ -310,7 +344,7 @@ class LoraHandler(object):
                     Only 'stable_lora' is supported for saving to a compatible webui file.
                     """
                 )
-            self.save_cloneofsimo_lora(models, save_path, step, replace_modules)
+            self.save_cloneofsimo_lora(model, save_path, step)
 
         if self.is_stable_lora():
             name = 'lora_text_to_video'
