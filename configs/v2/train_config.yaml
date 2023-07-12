@@ -53,7 +53,7 @@ train_text_encoder: False
 # It solely saves the weight differential between the initialized weights and updates. 
 
 # "cloneofsimo" or "stable_lora"
-lora_version: "stable_lora"
+lora_version: "cloneofsimo"
 
 # Use LoRA for the UNET model.
 use_unet_lora: True
