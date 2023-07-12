@@ -316,7 +316,7 @@ def save_lora(
 
         ext = '.safetensors'
         # Create LoRA out filename.
-        lora_out_file = f"{output_dir}/{lora_filename}{ext}"
+        lora_out_file = f"{output_dir}/webui_{lora_filename}{ext}"
 
         if not only_webui:
             save_path_full_weights = lora_out_file_full_weight + ext
