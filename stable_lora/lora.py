@@ -11,7 +11,7 @@ from torch.utils.data import ConcatDataset
 from transformers import CLIPTokenizer
 
 try:
-    from safetensors.torch import save_file, safe_open
+    from safetensors.torch import save_file, load_file
 except: 
     print("Safetensors is not installed. Saving while using use_safetensors will fail.")
 
@@ -359,7 +359,7 @@ def save_lora(
 def load_lora(model, lora_path: str):
     try:
         if os.path.exists(lora_path):
-            lora_dict = safe_open(lora_path, framework='pt')
+            lora_dict = load_file(lora_path)
             model.load_state_dict(lora_dict, strict=False)
 
     except Exception as e:

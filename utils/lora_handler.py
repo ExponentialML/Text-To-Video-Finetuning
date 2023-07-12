@@ -56,14 +56,6 @@ LoraFuncTypes = SimpleNamespace(**lora_func_types)
 LORA_VERSIONS = Literal[LoraVersions.stable_lora, LoraVersions.cloneofsimo]
 LORA_FUNC_TYPES = Literal[LoraFuncTypes.loader, LoraFuncTypes.injector]
 
-def is_valid_lora_file( 
-        file_basename, 
-        file_name, 
-        train_model, 
-        model_type: Union[CLIPTextModel, UNet3DConditionModel] = None
-    ):
-        return file_basename in file_name and isinstance(train_model, model_type)
-
 def filter_dict(_dict, keys=[]):
     if len(keys) == 0:
         assert "Keys cannot empty for filtering return dict."
@@ -73,7 +65,6 @@ def filter_dict(_dict, keys=[]):
             assert f"{k} does not exist in available LoRA arguments"
             
     return {k: v for k, v in _dict.items() if k in keys}
-
 
 class LoraHandler(object):
     def __init__(
@@ -128,18 +119,11 @@ class LoraHandler(object):
                 
         assert "LoRA Version does not exist."
 
-    def handle_lora_load(
-        self, 
-        file_name, 
-        train_model: Union[CLIPTextModel, UNet3DConditionModel] = None,
-        lora_loader_args: dict = None
-    ):
+    def handle_lora_load(self, file_name, lora_loader_args: dict = None):
         lora_activators = []
-
         for basename in FILE_BASENAMES:
-            if is_valid_lora_file(basename, file_name, train_model, model_type):
-                self.lora_loader(**lora_loader_args)
-                print(f"Successfully loaded LoRA for {basename}")
+            self.lora_loader(**lora_loader_args)
+            print(f"Successfully loaded LoRA for {basename}")
 
     def load_lora(
         self, 
@@ -150,22 +134,28 @@ class LoraHandler(object):
         try:
             if os.path.exists(lora_path):
                 for lora_file in os.listdir(lora_path):
-                    if lora_file.endswith(LORA_FILE_TYPES):
+                    if lora_file.endswith(tuple(LORA_FILE_TYPES)):
                         lora_file = os.path.join(lora_path, lora_file)
-                        return self.handle_lora_load(file_name, model, lora_loader_args)
 
+                        if self.is_cloneofsimo_lora():
+                            lora_loader_args.update({"loras": lora_file})
+
+                        if self.is_stable_lora():
+                            lora_loader_args.update({"lora_path": lora_file})
+                        
+                        return self.handle_lora_load(lora_file, lora_loader_args)
+    
         except Exception as e:
             print(e)
             print("Could not load LoRAs. Injecting new ones instead...")
             
     def get_lora_func_args(self, lora_path, use_lora, model, replace_modules, r, dropout, lora_bias):
         return_dict = lora_args.copy()
-
+    
         if self.is_cloneofsimo_lora():
             return_dict = filter_dict(return_dict, keys=CLONE_OF_SIMO_KEYS)
             return_dict.update({
                 "model": model,
-                "loras": torch.load(lora_path),
                 "target_replace_module": replace_modules,
                 "r": r
             })
@@ -241,17 +231,16 @@ class LoraHandler(object):
             self.lora_bias
         )
 
-        self.load_lora(model, lora_path=lora_path, lora_loader_args=lora_loader_args)
-
         if use_lora:
-           params, negation = self.do_lora_injection(
-            model, 
-            replace_modules, 
-            bias=self.lora_bias,
-            lora_loader_args=lora_loader_args,
-            dropout=dropout,
-            r=r
-        )
+            params, negation = self.do_lora_injection(
+                model, 
+                replace_modules, 
+                bias=self.lora_bias,
+                lora_loader_args=lora_loader_args,
+                dropout=dropout,
+                r=r
+            )
+            self.load_lora(model, lora_path=lora_path, lora_loader_args=lora_loader_args)
         
         params = model if params is None else params
         return params, negation
