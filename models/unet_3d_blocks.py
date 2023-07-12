@@ -276,6 +276,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
             TemporalConvLayer(
                 in_channels,
                 in_channels,
+                dropout=0.1
             )
         ]
         attentions = []
@@ -322,6 +323,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
                 TemporalConvLayer(
                     in_channels,
                     in_channels,
+                    dropout=0.1
                 )
             )
 
@@ -437,6 +439,7 @@ class CrossAttnDownBlock3D(nn.Module):
                 TemporalConvLayer(
                     out_channels,
                     out_channels,
+                    dropout=0.1
                 )
             )
             attentions.append(
@@ -575,6 +578,7 @@ class DownBlock3D(nn.Module):
                 TemporalConvLayer(
                     out_channels,
                     out_channels,
+                    dropout=0.1
                 )
             )
 
@@ -670,6 +674,7 @@ class CrossAttnUpBlock3D(nn.Module):
                 TemporalConvLayer(
                     out_channels,
                     out_channels,
+                    dropout=0.1
                 )
             )
             attentions.append(
@@ -803,6 +808,7 @@ class UpBlock3D(nn.Module):
                 TemporalConvLayer(
                     out_channels,
                     out_channels,
+                    dropout=0.1
                 )
             )
 
