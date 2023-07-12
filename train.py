@@ -170,7 +170,7 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_t
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
 def param_optim(model, condition, extra_params=None, is_lora=False, negation=None):
-    extra_params = extra_params if len(extra_params.keys()) > 1 else None
+    extra_params = extra_params if len(extra_params.keys()) > 0 else None
     return {
         "model": model, 
         "condition": condition, 
