@@ -429,8 +429,6 @@ def save_pipe(
     if save_pretrained_model:
         pipeline.save_pretrained(save_path)
 
-    pipeline.save_pretrained(save_path)
-    
     if is_checkpoint:
         unet, text_encoder = accelerator.prepare(unet, text_encoder)
         models_to_cast_back = [(unet, u_dtype), (text_encoder, t_dtype), (vae, v_dtype)]
@@ -568,12 +566,16 @@ def main(
     optim_params = [
         param_optim(unet, trainable_modules is not None, extra_params=extra_unet_params, negation=unet_negation),
         param_optim(text_encoder, train_text_encoder and not use_text_lora, extra_params=extra_text_encoder_params, 
-                    negation=text_encoder_negation
+                        negation=text_encoder_negation
                    ),
-        param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, extra_params={"lr": learning_rate}),
-        param_optim(unet_lora_params, use_unet_lora, is_lora=True, extra_params={"lr": learning_rate})
+        param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, 
+                        extra_params={**{"lr": learning_rate}, **extra_unet_params}
+                    ),
+        param_optim(unet_lora_params, use_unet_lora, is_lora=True, 
+                        extra_params={**{"lr": learning_rate}, **extra_text_encoder_params}
+                    )
     ]
-
+    
     params = create_optimizer_params(optim_params, learning_rate)
     
     # Create Optimizer
