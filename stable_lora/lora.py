@@ -189,7 +189,6 @@ class Conv3d(nn.Conv3d, LoRALayer):
             )
         return nn.Conv3d.forward(self, x)
 
-
 def create_lora_linear(child_module, r, dropout=0, bias=False, scale=0):
     return loralb.Linear(
         child_module.in_features, 
@@ -208,6 +207,7 @@ def create_lora_conv(child_module, r, dropout=0, bias=False, rescale=False, scal
         child_module.out_channels,
         kernel_size=child_module.kernel_size[0],
         padding=child_module.padding,
+        stride=child_module.stride,
         merge_weights=False,
         bias=bias,
         lora_dropout=dropout,
