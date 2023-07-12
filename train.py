@@ -866,7 +866,8 @@ def main(
                         lora_manager,
                         unet_lora_modules,
                         text_encoder_lora_modules,
-                        is_checkpoint=True
+                        is_checkpoint=True,
+                        save_pretrained_model=save_pretrained_model
                     )
 
                 if should_sample(global_step, validation_steps, validation_data):
@@ -942,7 +943,8 @@ def main(
                 lora_manager,
                 unet_lora_modules,
                 text_encoder_lora_modules,
-                is_checkpoint=False
+                is_checkpoint=False,
+                save_pretrained_model=save_pretrained_model
         )     
     accelerator.end_training()
 
