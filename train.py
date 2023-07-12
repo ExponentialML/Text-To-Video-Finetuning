@@ -600,7 +600,7 @@ def main(
     text_encoder_lora_modules: Tuple[str] = ["CLIPEncoderLayer"],
     lora_rank: int = 16,
     lora_path: str = '',
-    logger: str = 'tensorboard',
+    logger_type: str = 'tensorboard',
     **kwargs
 ):
 
@@ -609,7 +609,7 @@ def main(
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
         mixed_precision=mixed_precision,
-        log_with=logger,
+        log_with=logger_type,
         project_dir=output_dir
     )
 
