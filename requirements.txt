@@ -4,6 +4,7 @@ torchvision
 torchaudio
 git+https://github.com/huggingface/diffusers.git
 git+https://github.com/cloneofsimo/lora.git
+git+https://github.com/microsoft/LoRA
 transformers
 einops
 decord
