@@ -74,6 +74,81 @@ Recommended to use a RTX 3090, but you should be able to train on GPUs with <= 1
 - Hybrid LoRA training.
 - Training only using LoRA with ranks between 4-16.
 
+## Preprocessing your data
+
+### Using Captions
+
+You can use caption files when training on images or video. Simply place them into a folder like so:
+
+**Images**: `/images/img.png /images/img.txt`
+**Videos**: `/videos/vid.mp4 | /videos/vid.txt`
+
+Then in your config, make sure to have `-folder` enabled, along with the root directory containing the files.
+
+### Process Automatically
+
+You can automatically caption the videos using the [Video-BLIP2-Preprocessor Script](https://github.com/ExponentialML/Video-BLIP2-Preprocessor)
+
+## Configuration
+
+The configuration uses a YAML config borrowed from [Tune-A-Video](https://github.com/showlab/Tune-A-Video) reposotories. 
+
+All configuration details are placed in `configs/v2/train_config.yaml`. Each parameter has a definition for what it does.
+
+### How would you recommend I proceed with making a config with my data?
+
+I highly recommend (I did this myself) going to `configs/v2/train_config.yaml`. Then make a copy of it and name it whatever you wish `my_train.yaml`.
+
+Then, follow each line and configure it for your specific use case. 
+
+The instructions should be clear enough to get you up and running with your dataset, but feel free to ask any questions in the discussion board.
+
+## Training a LoRA
+
+***Please read this section carefully if you are training a LoRA model***
+You can also train a LoRA that is both compatible with the webui extension. By default it's set to `'cloneofsimo'`, which was the first LoRA implementation for Stable Diffusion.
+This version you can use in the `inference.py` file in this repository. It is **not** compatible with the webui.
+
+To train and ***use*** a LoRA with the webui, change the `lora_version` to **"stable_lora"** in your config. This will train an [A1111 webui extension](https://github.com/kabachuha/sd-webui-text2video) compatibile LoRA.
+You can get started at `configs/v2/stable_lora_config.yaml` and edit it from there. During and after training, LoRAs will be saved in your outputs directory with the prefix `_webui`.
+
+If you do not choose this setting, you *will not* currently be able to use these in the webui. If you train a Stable LoRA file, you cannot *currently* use them in `inference.py`.
+
+### Continue training a LoRA
+To continue training a LoRA, simply set your `lora_path` in your config to the **directory** that contains your LoRA file(s), not an individual file. 
+Each specific LoRA should have `_unet` or `_text_encoder` in the file name respectively, or else it will not work.
+
+You should then be able to resume training from a LoRA model, regardless of which method you use (as long as the trained LoRA matches the version in the config).
+
+### What you cannot do:
+- Use LoRA files that were made for SD image models in other trainers.
+- Use 'cloneofsimo' LoRAs in another project (unless you build it or create a PR)
+- Merge LoRA weights together (yet).
+
+## Finetune.
+```python
+python train.py --config ./configs/v2/train_config.yaml
+```
+---
+
+## Training Results
+
+With a lot of data, you can expect training results to show at roughly 2500 steps at a constant learning rate of 5e-6. 
+
+When finetuning on a single video, you should see results in half as many steps.
+
+After training, you should see your results in your output directory. 
+
+By default, it should be placed at the script root under `./outputs/train_<date>`
+
+From my testing, I recommend:
+
+- Keep the number of sample frames between 4-16. Use long frame generation for inference, *not* training.
+- If you have a low VRAM system, you can try single frame training or just use `n_sample_frames: 2`.
+- Using a learning rate of about `5e-6` seems to work well in all cases.
+- The best quality will always come from training the text encoder. If you're limited on VRAM, disabling it can help.
+- Leave some memory to avoid OOM when saving models during training.
+
 ## Running inference
 The `inference.py` script can be used to render videos with trained checkpoints.
 
@@ -153,81 +228,6 @@ options:
                         Post-process the videos with LAMA to inpaint ModelScope's
                         common watermarks.
 ```
-
-## Preprocessing your data
-
-### Using Captions
-
-You can use caption files when training on images or video. Simply place them into a folder like so:
-
-**Images**: `/images/img.png /images/img.txt`
-**Videos**: `/videos/vid.mp4 | /videos/vid.txt`
-
-Then in your config, make sure to have `-folder` enabled, along with the root directory containing the files.
-
-### Process Automatically
-
-You can automatically caption the videos using the [Video-BLIP2-Preprocessor Script](https://github.com/ExponentialML/Video-BLIP2-Preprocessor)
-
-## Configuration
-
-The configuration uses a YAML config borrowed from [Tune-A-Video](https://github.com/showlab/Tune-A-Video) reposotories. 
-
-All configuration details are placed in `configs/v2/train_config.yaml`. Each parameter has a definition for what it does.
-
-### How would you recommend I proceed with making a config with my data?
-
-I highly recommend (I did this myself) going to `configs/v2/train_config.yaml`. Then make a copy of it and name it whatever you wish `my_train.yaml`.
-
-Then, follow each line and configure it for your specific use case. 
-
-The instructions should be clear enough to get you up and running with your dataset, but feel free to ask any questions in the discussion board.
-
-## Training a LoRA
-
-***Please read this section carefully if you are training a LoRA model***
-You can also train a LoRA that is both compatible with the webui extension. By default it's set to `'cloneofsimo'`, which was the first LoRA implementation for Stable Diffusion.
-This version you can use in the `inference.py` file in this repository. It is **not** compatible with the webui.
-
-To train and ***use*** a LoRA with the webui, change the `lora_version` to **"stable_lora"** in your config. This will train an [A1111 webui extension](https://github.com/kabachuha/sd-webui-text2video) compatibile LoRA.
-You can get started at `configs/v2/stable_lora_config.yaml` and edit it from there. During and after training, LoRAs will be saved in your outputs directory with the prefix `_webui`.
-
-If you do not choose this setting, you *will not* currently be able to use these in the webui. If you train a Stable LoRA file, you cannot *currently* use them in `inference.py`.
-
-### Continue training a LoRA
-To continue training a LoRA, simply set your `lora_path` in your config to the **directory** that contains your LoRA file(s), not an individual file. 
-Each specific LoRA should have `_unet` or `_text_encoder` in the file name respectively, or else it will not work.
-
-You should then be able to resume training from a LoRA model, regardless of which method you use (as long as the trained LoRA matches the version in the config).
-
-### What you cannot do:
-- Use LoRA files that were made for SD image models in other trainers.
-- Use 'cloneofsimo' LoRAs in another project (unless you build it or create a PR)
-- Merge LoRA weights together (yet).
-
-## Finetune.
-```python
-python train.py --config ./configs/v2/train_config.yaml
-```
----
-
-## Training Results
-
-With a lot of data, you can expect training results to show at roughly 2500 steps at a constant learning rate of 5e-6. 
-
-When finetuning on a single video, you should see results in half as many steps.
-
-After training, you should see your results in your output directory. 
-
-By default, it should be placed at the script root under `./outputs/train_<date>`
-
-From my testing, I recommend:
-
-- Keep the number of sample frames between 4-16. Use long frame generation for inference, *not* training.
-- If you have a low VRAM system, you can try single frame training or just use `n_sample_frames: 2`.
-- Using a learning rate of about `5e-6` seems to work well in all cases.
-- The best quality will always come from training the text encoder. If you're limited on VRAM, disabling it can help.
-- Leave some memory to avoid OOM when saving models during training.
 
 ## Developing
 
