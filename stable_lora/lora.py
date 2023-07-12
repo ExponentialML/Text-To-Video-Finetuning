@@ -319,22 +319,23 @@ def save_lora(
         lora_out_file = f"{output_dir}/{lora_filename}{ext}"
 
         if not only_webui:
-            save_path_full_weights = lora_out_file_full_weight
+            save_path_full_weights = lora_out_file_full_weight + ext
 
         save_path = lora_out_file
 
         if not only_webui:
             for i, model in enumerate([unet, text_encoder]):
                 if save_text_weights and i == 1:
-                    save_path_full_weights = save_path_full_weights.replace(ext, f"_text_encoder{ext}")
+                    non_webui_weights = save_path_full_weights.replace(ext, f"_text_encoder{ext}")
 
                 else:
-                    save_path_full_weights = save_path_full_weights.replace(ext, f"_unet{ext}")
+                    non_webui_weights = save_path_full_weights.replace(ext, f"_unet{ext}")
+
                 # Load only the LoRAs from the state dict.
                 lora_dict = loralb.lora_state_dict(model, bias=lora_bias)
                 
                 # Save the models as fp32. This ensures we can finetune again without having to upcast.                      
-                save_file(lora_dict, save_path_full_weights)
+                save_file(lora_dict, non_webui_weights)
         
         if save_for_webui:
             # Convert the keys to compvis model and webui
