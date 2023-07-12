@@ -170,6 +170,7 @@ def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_t
         print("Could not enable memory efficient attention for xformers or Torch 2.0.")
 
 def param_optim(model, condition, extra_params=None, is_lora=False, negation=None):
+    extra_params = extra_params if len(extra_params.keys()) > 1 else None
     return {
         "model": model, 
         "condition": condition, 
@@ -564,6 +565,9 @@ def main(
         use_text_lora, text_encoder, lora_manager.text_encoder_replace_modules, lora_text_dropout, lora_path, r=lora_rank) 
 
     # Create parameters to optimize over with a condition (if "condition" is true, optimize it)
+    extra_unet_params = extra_unet_params if extra_unet_params is not None else {}
+    extra_text_encoder_params = extra_unet_params if extra_unet_params is not None else {}
+
     optim_params = [
         param_optim(unet, trainable_modules is not None, extra_params=extra_unet_params, negation=unet_negation),
         param_optim(text_encoder, train_text_encoder and not use_text_lora, extra_params=extra_text_encoder_params, 
