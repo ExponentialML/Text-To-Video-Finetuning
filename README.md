@@ -194,7 +194,11 @@ You can get started at `configs/v2/stable_lora_config.yaml` and edit it from the
 
 If you do not choose this setting, you *will not* currently be able to use these in the webui. If you train a Stable LoRA file, you cannot *currently* use them in `inference.py`.
 
-To continue training a LoRA, simply set your `lora_path` in your config to the **directory** that contains your LoRA file, not an individual one. You should then be able to resume training from a LoRA model, regardless of which method you use (as long as the trained LoRA matches the version in the config).
+### Continue training a LoRA
+To continue training a LoRA, simply set your `lora_path` in your config to the **directory** that contains your LoRA file(s), not an individual file. 
+Each specific LoRA should have `_unet` or `_text_encoder` in the file name respectively, or else it will not work.
+
+You should then be able to resume training from a LoRA model, regardless of which method you use (as long as the trained LoRA matches the version in the config).
 
 ### What you cannot do:
 - Use LoRA files that were made for SD image models in other trainers.
