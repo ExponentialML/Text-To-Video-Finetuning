@@ -53,8 +53,8 @@ lora_args = dict(
 LoraVersions = SimpleNamespace(**lora_versions)
 LoraFuncTypes = SimpleNamespace(**lora_func_types)
 
-LORA_VERSIONS = Literal[LoraVersions.stable_lora, LoraVersions.cloneofsimo]
-LORA_FUNC_TYPES = Literal[LoraFuncTypes.loader, LoraFuncTypes.injector]
+LORA_VERSIONS = [LoraVersions.stable_lora, LoraVersions.cloneofsimo]
+LORA_FUNC_TYPES = [LoraFuncTypes.loader, LoraFuncTypes.injector]
 
 def filter_dict(_dict, keys=[]):
     if len(keys) == 0:
