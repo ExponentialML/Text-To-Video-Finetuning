@@ -1,4 +1,4 @@
-accelerate
+accelerate==0.19
 torch
 torchvision
 torchaudio
