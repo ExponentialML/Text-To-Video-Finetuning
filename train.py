@@ -454,6 +454,7 @@ def main(
     output_dir: str,
     train_data: Dict,
     validation_data: Dict,
+    extra_train_data: list = [],
     dataset_types: Tuple[str] = ('json'),
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = ("attn1", "attn2"),
@@ -602,6 +603,17 @@ def main(
 
     # Get the training dataset based on types (json, single_video, image)
     train_datasets = get_train_dataset(dataset_types, train_data, tokenizer)
+
+    # If you have extra train data, you can add a list of however many you would like.
+    # Eg: extra_train_data: [{: {dataset_types, train_data: {etc...}}}] 
+    try:
+        if extra_train_data is not None and len(extra_train_data) > 0:
+            for dataset in extra_train_data:
+                d_t, t_d = dataset['dataset_types'], dataset['train_data']
+                train_datasets += get_train_dataset(d_t, t_d, tokenizer)
+
+    except Exception as e:
+        print(f"Could not process extra train datasets due to an error : {e}")
 
     # Extend datasets that are less than the greatest one. This allows for more balanced training.
     attrs = ['train_data', 'frames', 'image_dir', 'video_files']
