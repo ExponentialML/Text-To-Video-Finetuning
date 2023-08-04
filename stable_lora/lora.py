@@ -370,9 +370,7 @@ def load_lora(model, lora_path: str):
 
 def set_mode(model, train=False):
     for n, m in model.named_modules():
-        is_lora = any(
-            isinstance(m,x) for x in [loralb.Linear, Conv2d, Conv3d, loralb.Embedding]
-        )
+        is_lora = hasattr(m, 'merged')
         if is_lora:
             m.train(train)
 
