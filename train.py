@@ -151,6 +151,21 @@ def set_torch_2_attn(unet):
     if optim_count > 0: 
         print(f"{optim_count} Attention layers using Scaled Dot Product Attention.")
 
+def set_causal_training(unet, is_causal=False, can_enable_causal=False):
+    if not is_causal:
+        return
+
+    if not can_enable_causal:
+        print("Causal training is not supported for Xformers. Please install Torch 2 or disable Xformers to enable this feature.")
+        return
+        
+    for name, module in unet.named_modules():
+        module_name = module.__class__.__name__
+        if module_name == 'BasicTransformerBlock':
+            module.is_causal = True
+
+    print("Causal Training successfully enabled.")
+
 def handle_memory_attention(enable_xformers_memory_efficient_attention, enable_torch_2_attn, unet): 
     try:
         is_torch_2 = hasattr(F, 'scaled_dot_product_attention')
@@ -504,6 +519,7 @@ def main(
     lora_unet_dropout: float = 0.1,
     lora_text_dropout: float = 0.1,
     logger_type: str = 'tensorboard',
+    causal_training: bool = False,
     **kwargs
 ):
 
@@ -539,6 +555,9 @@ def main(
     # Enable xformers if available
     handle_memory_attention(enable_xformers_memory_efficient_attention, enable_torch_2_attn, unet)
 
+    # Allow causal training in time, and full attention for space.
+    set_causal_training(unet, is_causal=causal_training, can_enable_causal=not enable_xformers_memory_efficient_attention)
+    
     if scale_lr:
         learning_rate = (
             learning_rate * gradient_accumulation_steps * train_batch_size * accelerator.num_processes
