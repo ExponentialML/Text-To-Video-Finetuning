@@ -378,5 +378,5 @@ def set_mode(model, train=False):
 
 def set_mode_group(models, train):
    for model in models: 
-        set_mode(model)
+        set_mode(model, train)
         model.train(train)
