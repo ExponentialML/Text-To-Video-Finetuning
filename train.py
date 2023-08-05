@@ -269,8 +269,7 @@ def handle_cache_latents(
         train_dataloader, 
         train_batch_size, 
         vae, 
-        cached_latent_dir=None,
-        train_data=None
+        cached_latent_dir=None
     ):
 
     # Cache latents by storing them in VRAM. 
@@ -309,7 +308,7 @@ def handle_cache_latents(
         
 
     return torch.utils.data.DataLoader(
-        CachedDataset(cache_dir=cache_save_dir, **train_data), 
+        CachedDataset(cache_dir=cache_save_dir), 
         batch_size=train_batch_size, 
         shuffle=False,
         num_workers=0,

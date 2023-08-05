@@ -542,36 +542,14 @@ class VideoFolderDataset(DatasetProcessor, Dataset):
         return self._example(video[0], prompt_ids, prompt)
 
 class CachedDataset(DatasetProcessor, Dataset):
-    def __init__(
-        self,
-        cache_dir: str = '', 
-        start_idx: int = 1, 
-        frame_step: int = 1, 
-        n_sample_frames: int = 24,
-        width: int = 384,
-        height: int = 384,
-        *args, 
-        **kwargs
-    ):
+    def __init__(self, cache_dir: str = ''):
         DatasetProcessor.__init__(self)
         self.cache_dir = cache_dir
         self.cached_data_list = self.get_files_list()
-        self.start_idx = start_idx
-        self.frame_step = frame_step
-        self.width = width
-        self.height = height
-        self.n_sample_frames = n_sample_frames
-        
+
     def get_files_list(self):
         tensors_list = [f"{self.cache_dir}/{x}" for x in os.listdir(self.cache_dir) if x.endswith('.pt')]
         return sorted(tensors_list)
-
-    def get_frame_buckets(self, x):
-        f, c, h, w = x.shape        
-        width, height = sensible_buckets(self.width, self.height, h, w)
-        resize = T.transforms.Resize((height, width), antialias=True)
-
-        return resize
 
     def __len__(self):
         return len(self.cached_data_list)
@@ -603,7 +581,7 @@ class ConcatInterleavedDataset(Dataset):
         train_data_var = getattr(dataset, train_data_var_name)
 
         for idx, item in enumerate(train_data_var):
-            if isinstance(item, dict):
+            if isinstance(item, dict) and 'idx_module' in item:
                 ref_idx = item['idx_modulo']
                 already_processed_item = processed_dataset[ref_idx]
 
