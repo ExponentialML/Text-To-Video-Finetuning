@@ -172,12 +172,12 @@ class Conv3d(nn.Conv3d, LoRALayer):
         if mode:
             if self.merge_weights and self.merged:
                 # Make sure that the weights are not merged
-                self.weight.data -= (self.lora_B @ self.lora_A).view(self.weight.shape) * self.scaling
+                self.weight.data -= torch.mean((self.lora_B @ self.lora_A).view(self.view_shape), dim=-2,  keepdim=True) * self.scaling
                 self.merged = False
         else:
             if self.merge_weights and not self.merged:
                 # Merge the weights and mark it
-                self.weight.data += (self.lora_B @ self.lora_A).view(self.weight.shape) * self.scaling
+                self.weight.data += torch.mean((self.lora_B @ self.lora_A).view(self.view_shape), dim=-2,  keepdim=True) * self.scaling
                 self.merged = True
 
     def forward(self, x: torch.Tensor):
@@ -193,7 +193,7 @@ def create_lora_linear(child_module, r, dropout=0, bias=False, scale=0):
     return loralb.Linear(
         child_module.in_features, 
         child_module.out_features, 
-        merge_weights=False,
+        merge_weights=True,
         bias=bias,
         lora_dropout=dropout,
         lora_alpha=r,
@@ -208,7 +208,7 @@ def create_lora_conv(child_module, r, dropout=0, bias=False, rescale=False, scal
         kernel_size=child_module.kernel_size[0],
         padding=child_module.padding,
         stride=child_module.stride,
-        merge_weights=False,
+        merge_weights=True,
         bias=bias,
         lora_dropout=dropout,
         lora_alpha=r,
@@ -223,7 +223,7 @@ def create_lora_conv3d(child_module, r, dropout=0, bias=False, rescale=False, sc
         kernel_size=child_module.kernel_size[0],
         padding=child_module.padding,
         stride=child_module.stride,
-        merge_weights=False,
+        merge_weights=True,
         bias=bias,
         lora_dropout=dropout,
         lora_alpha=r,
@@ -235,7 +235,7 @@ def create_lora_emb(child_module, r):
     return loralb.Embedding(
         child_module.num_embeddings, 
         child_module.embedding_dim, 
-        merge_weights=False,
+        merge_weights=True,
         lora_alpha=r,
         r=r
     )
