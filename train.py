@@ -41,6 +41,7 @@ from utils.dataset import VideoJsonDataset, SingleVideoDataset, \
     ImageDataset, VideoFolderDataset, CachedDataset
 from einops import rearrange, repeat
 from utils.lora_handler import LoraHandler, LORA_VERSIONS
+from utils.train_utils import DenoiseCallback
 
 already_printed_trainables = False
 
@@ -104,6 +105,20 @@ def export_to_video(video_frames, output_video_path, fps):
     for i in range(len(video_frames)):
         img = cv2.cvtColor(video_frames[i], cv2.COLOR_RGB2BGR)
         video_writer.write(img)
+
+def slice_input(x, idx, assign=None, from_begin=True, is_stop=False):
+    if assign is not None:
+        if from_begin:
+            x[:, :, idx:, ...] = assign
+        else:
+            x[:, :, :idx, ...] = assign
+    else:
+        if from_begin:
+            if not is_stop:
+                return x[:, :, idx:, ...]
+            else:
+                return x[:, :, :idx, ...]
+        return x[:, :, idx, ...]
 
 def create_output_folders(output_dir, config):
     now = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -928,15 +943,100 @@ def main(
 
                             out_file = f"{output_dir}/samples/{save_filename}.mp4"
                             
-                            with torch.no_grad():
-                                video_frames = pipeline(
-                                    prompt,
-                                    width=validation_data.width,
-                                    height=validation_data.height,
-                                    num_frames=validation_data.num_frames,
-                                    num_inference_steps=validation_data.num_inference_steps,
-                                    guidance_scale=validation_data.guidance_scale
-                                ).frames
+                            if not causal_training:
+                                with torch.no_grad():
+                                    video_frames = pipeline(
+                                        prompt,
+                                        width=validation_data.width,
+                                        height=validation_data.height,
+                                        num_frames=validation_data.num_frames,
+                                        num_inference_steps=validation_data.num_inference_steps,
+                                        guidance_scale=validation_data.guidance_scale
+                                    ).frames
+                            else:
+                                if latents.shape[2] == validation_data.num_frames:
+                                    rand_noise = torch.randn_like(latents)
+                                else:
+                                    batch_size = latents.shape[0]
+                                    channels = latents.shape[1]
+
+                                    latents_shape = (
+                                        1,
+                                        channels, 
+                                        validation_data.num_frames,
+                                        validation_data.height // 8,
+                                        validation_data.width // 8
+                                    )
+
+                                    rand_noise = torch.randn(latents_shape, device=latents.device, dtype=latents.dtype)
+                                    latents = rand_noise
+                            
+                                num_frames = validation_data.num_frames
+                                denoise_callback = DenoiseCallback(
+                                    pipeline=pipeline,
+                                    latents=latents,
+                                    rand_noise=rand_noise,
+                                    cond_frames=validation_data.get('condition_frames', 3),
+                                    slice_input_func=slice_input
+                                )
+
+                                with torch.no_grad():
+                                    if validation_data.num_frames == latents.shape[2]:
+                                        latents_list = []
+                                        vid_count = validation_data.get('vid_count', 3)
+                                        timesteps = pipeline.scheduler.timesteps
+
+                                        for i in tqdm(range(vid_count), desc=f"Doing generation for count of: {vid_count }"):
+                                            if len(latents_list) > 0:
+                                                cond_frames = denoise_callback.cond_frames
+
+                                                prev_latents = rearrange(latents_list[-1], 'b f c h w -> b c f h w')
+                                                prev_latents = tensor_to_vae_latent(prev_latents, pipeline.vae)
+                                                
+                                                latents = prev_latents.clone()
+                                                latents = torch.roll(latents, cond_frames, dims=2)
+                                                prev_cond_latents = latents[:, :, :cond_frames, ...].clone()
+
+                                                causal_latents = torch.zeros_like(latents)
+                                                
+                                                prev_cond_frames_cat = [prev_cond_latents, causal_latents]
+                                                prev_cond_frames = torch.cat(prev_cond_frames_cat, dim=2)
+
+                                                rand_noise = torch.randn_like(prev_cond_frames)
+                                                prev_noisy_cond = pipeline.scheduler.add_noise(prev_cond_frames, rand_noise, timesteps[0])
+
+                                                latents_in = prev_noisy_cond
+                                            
+                                            else:
+                                                latents = None
+                                                latents_in = rand_noise
+                                            
+                                            denoise_callback.update_callback_conditions(latents, rand_noise)
+
+                                            video_frames = pipeline(
+                                                prompt,
+                                                width=validation_data.width,
+                                                height=validation_data.height,
+                                                num_frames=validation_data.num_frames ,
+                                                num_inference_steps=validation_data.num_inference_steps,
+                                                guidance_scale=validation_data.guidance_scale,
+                                                latents=latents_in,
+                                                callback=denoise_callback.callback,
+                                                output_type='pt'
+                                            ).frames
+
+                                            save_frames = video_frames.clone()
+                                            test_frames = tensor2vid(slice_input(save_frames, -num_frames))
+                                            export_to_video(test_frames, out_file.replace('.mp4', f'{i}_.mp4'), train_data.get('fps', 8))
+
+                                            latents_list.append(slice_input(video_frames, -num_frames))
+
+                                        if len(latents_list) > 0:
+                                            all_frames = torch.cat(latents_list, dim=2)
+
+                                            video_frames = tensor2vid(all_frames)
+                                            latents_list.clear()
+                                
                             export_to_video(video_frames, out_file, train_data.get('fps', 8))
 
                             del pipeline
