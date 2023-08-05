@@ -706,16 +706,21 @@ def main(
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
+    
+    unet_train_enabled = False
+    text_train_enabled = False
 
     def finetune_unet(batch, train_encoder=False):
         nonlocal use_offset_noise
         nonlocal rescale_schedule
-        
+        nonlocal unet_train_enabled
+        nonlocal text_train_enabled
+
         # Check if we are training the text encoder
-        text_trainable = (train_text_encoder or lora_manager.use_text_lora)
+        text_trainable = (train_text_encoder or use_text_lora)
         
         # Unfreeze UNET Layers
-        if global_step == 0: 
+        if global_step == 0 and not unet_train_enabled: 
             already_printed_trainables = False
             unet.train()
             handle_trainable_modules(
@@ -724,6 +729,7 @@ def main(
                 is_enabled=True,
                 negation=unet_negation
             )
+            unet_train_enabled = True
 
         # Convert videos to latent space
         pixel_values = batch["pixel_values"]
@@ -736,9 +742,6 @@ def main(
         # Get video length
         video_length = latents.shape[2]
 
-        # Sample noise that we'll add to the latents
-        use_offset_noise = use_offset_noise and not rescale_schedule
-        noise = sample_noise(latents, offset_noise_strength, use_offset_noise)
         bsz = latents.shape[0]
 
         # Sample a random timestep for each video
@@ -747,10 +750,16 @@ def main(
 
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
+        #latents = rearrange(latents, 'b c f h w -> (b f) c h w')
+
+        # Sample noise that we'll add to the latents
+        use_offset_noise = use_offset_noise and not rescale_schedule
+        noise = sample_noise(latents, offset_noise_strength, use_offset_noise)
+
         noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-    
+ 
         # Enable text encoder training
-        if text_trainable:
+        if text_trainable and not text_train_enabled:
             text_encoder.train()
 
             if lora_manager.use_text_lora: 
@@ -763,6 +772,7 @@ def main(
                     negation=text_encoder_negation
             )
             cast_to_gpu_and_type([text_encoder], accelerator, torch.float32)
+            text_train_enabled = True
                
         # *Potentially* Fixes gradient checkpointing training.
         # See: https://github.com/prigoyal/pytorch_memonger/blob/master/tutorial/Checkpointing_for_PyTorch_models.ipynb
@@ -783,9 +793,8 @@ def main(
 
         else:
             raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
-
+      
         # This allows us to train text information only on the spatial layers.
-        should_truncate_video = (video_length > 1 and text_trainable)
         should_detach = video_length > 1
 
         # We detach the encoder hidden states for the first pass (video frames > 1)
@@ -793,10 +802,6 @@ def main(
         detached_encoder_state = encoder_hidden_states.clone().detach()
         trainable_encoder_state = encoder_hidden_states.clone()
 
-        if should_truncate_video:
-            noisy_latents = noisy_latents[:,:,:1, ...]
-            target = target[:,:,:1, ...]
-                
         encoder_hidden_states = (
             detached_encoder_state if should_detach else trainable_encoder_state
         )
