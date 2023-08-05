@@ -613,7 +613,6 @@ def main(
             train_datasets = get_train_dataset(dataset_types, train_data, tokenizer)
         else:
             train_datasets = []
-            logger.warn("I have disabled primary training, but have extra train data enabled.")
 
         # If you have extra train data, you can add a list of however many you would like.
         # Eg: extra_train_data: [{: {dataset_types, train_data: {etc...}}}] 
