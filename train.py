@@ -845,7 +845,7 @@ def main(
                 try:
                     accelerator.backward(loss)
                     params_to_clip = (
-                        unet.parameters() if not train_text_encoder 
+                        unet.parameters() if not (train_text_encoder or not use_text_lora) 
                     else 
                         list(unet.parameters()) + list(text_encoder.parameters())
                     )
