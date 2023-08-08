@@ -18,6 +18,7 @@ import torch.utils.checkpoint
 import torchvision.transforms as T
 import diffusers
 import transformers
+import itertools
 
 from torchvision import transforms
 from tqdm.auto import tqdm
@@ -845,11 +846,11 @@ def main(
                 try:
                     accelerator.backward(loss)
                     params_to_clip = (
-                        unet.parameters() if (not train_text_encoder or not use_text_lora) 
+                        [unet.parameters()] if (not train_text_encoder or not use_text_lora) 
                     else 
                         list(unet.parameters()) + list(text_encoder.parameters())
                     )
-                    accelerator.clip_grad_norm_(params_to_clip, max_grad_norm)
+                    accelerator.clip_grad_norm_(itertools.chain(*params_to_clip), max_grad_norm)
                 
                     optimizer.step()
                     lr_scheduler.step()
