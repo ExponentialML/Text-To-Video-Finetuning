@@ -844,11 +844,12 @@ def main(
                 # Backpropagate
                 try:
                     accelerator.backward(loss)
-                    params_to_clip = (
-                        unet.parameters() if (not train_text_encoder or not use_text_lora) 
-                    else 
-                        list(unet.parameters()) + list(text_encoder.parameters())
-                    )
+
+                    if any([train_text_encoder, use_text_lora]):
+                        params_to_clip = list(unet.parameters()) + list(text_encoder.parameters())
+                    else:
+                        params_to_clip = unet.parameters()
+
                     accelerator.clip_grad_norm_(params_to_clip, max_grad_norm)
                 
                     optimizer.step()
