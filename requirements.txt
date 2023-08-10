@@ -14,3 +14,4 @@ omegaconf
 opencv-python
 pydantic
 compel
+kornia
