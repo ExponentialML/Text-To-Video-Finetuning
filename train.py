@@ -834,7 +834,7 @@ def main(
                     progress_bar.update(1)
                 continue
             
-            with accelerator.accumulate(unet) ,accelerator.accumulate(text_encoder):
+            with accelerator.accumulate(unet) as _, accelerator.accumulate(text_encoder) as _:
 
                 text_prompt = batch['text_prompt'][0]
                 
