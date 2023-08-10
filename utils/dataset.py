@@ -146,8 +146,24 @@ class DatasetProcessor(object):
         
         return video, vr 
 
-    def normalize_input(self, item):
-        return  (item / 127.5 - 1.0)
+    # Inspired by VideoMAE
+    def normalize_input(
+        self, 
+        item, 
+        mean=[0.485, 0.456, 0.406], 
+        std=[0.229, 0.224, 0.225]
+    ):
+        if item.dtype == torch.uint8:
+            item = rearrange(item, 'f c h w -> f h w c')
+            item = item.float() / 255.0
+            mean = torch.tensor(mean)
+            std = torch.tensor(std)
+
+            out = rearrange((item - mean) / std, 'f h w c -> f c h w')
+            
+            return out
+        else:
+            return  item / (127.5 - 1.0)
 
     def _example(self, item, prompt_ids, prompt):
         example = {
@@ -567,8 +583,11 @@ class ConcatInterleavedDataset(Dataset):
         self.interleave_datasets()
 
     def get_parent_dataset(self):
-        dataset_lengths = [d.__len__() for d in self.datasets]
 
+        # There's a chance that the subset images may be bigger than the video if doing text training.
+        # If it has the attribute "is_subset", we can simply ignore it to ensure it isn't the biggest 
+        # length.
+        dataset_lengths = [d.__len__() if not hasattr(d, 'is_subset') else 0 for d in self.datasets]
         max_dataset_index = dataset_lengths.index(max(dataset_lengths))
 
         parent_dataset = self.datasets[max_dataset_index]
@@ -581,7 +600,7 @@ class ConcatInterleavedDataset(Dataset):
         train_data_var = getattr(dataset, train_data_var_name)
 
         for idx, item in enumerate(train_data_var):
-            if isinstance(item, dict) and 'idx_module' in item:
+            if isinstance(item, dict) and 'idx_modulo' in item:
                 ref_idx = item['idx_modulo']
                 already_processed_item = processed_dataset[ref_idx]
 
