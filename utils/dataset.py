@@ -18,15 +18,16 @@ decord.bridge.set_bridge('torch')
 from torch.utils.data import Dataset
 from einops import rearrange, repeat
 
-# Inspired by VideoMAE
+# Inspired by the VideoMAE repository.
     def normalize_input(
-        self, 
         item, 
         mean=[0.485, 0.456, 0.406], 
-        std=[0.229, 0.224, 0.225]
+        std=[0.229, 0.224, 0.225],
+        use_simple_norm=False
     ):
-        if item.dtype == torch.uint8:
+        if item.dtype == torch.uint8 and not use_simple_norm:
             item = rearrange(item, 'f c h w -> f h w c')
+            
             item = item.float() / 255.0
             mean = torch.tensor(mean)
             std = torch.tensor(std)
@@ -34,6 +35,7 @@ from einops import rearrange, repeat
             out = rearrange((item - mean) / std, 'f h w c -> f c h w')
             
             return out
+            
         else:
             return  item / (127.5 - 1.0)
             
