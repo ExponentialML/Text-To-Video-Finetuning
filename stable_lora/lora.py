@@ -147,6 +147,7 @@ class Conv3d(nn.Conv3d, LoRALayer):
         # Get view transform shape
         i, o, k = self.weight.shape[:3]
         self.view_shape = (i, o, k, kernel_size, 1)
+        self.force_disable_merge = True
 
         if r > 0:
             self.lora_A = nn.Parameter(
@@ -169,6 +170,12 @@ class Conv3d(nn.Conv3d, LoRALayer):
 
     def train(self, mode: bool = True):
         nn.Conv3d.train(self, mode)
+
+        # HACK Merging the weights this way could potentially cause vanishing gradients if validation is enabled.
+        # If you are to save this as a pretrained model, you will have to merge these weights afterwards, then save.
+        if self.force_disable_merge:
+            return
+            
         if mode:
             if self.merge_weights and self.merged:
                 # Make sure that the weights are not merged
