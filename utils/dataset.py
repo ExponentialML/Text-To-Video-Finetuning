@@ -23,7 +23,7 @@ from einops import rearrange, repeat
         item, 
         mean=[0.485, 0.456, 0.406], 
         std=[0.229, 0.224, 0.225],
-        use_simple_norm=False
+        use_simple_norm=True
     ):
         if item.dtype == torch.uint8 and not use_simple_norm:
             item = rearrange(item, 'f c h w -> f h w c')
