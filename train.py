@@ -457,8 +457,8 @@ def main(
     extra_train_data: list = [],
     dataset_types: Tuple[str] = ('json'),
     validation_steps: int = 100,
-    trainable_modules: Tuple[str] = ("attn1", "attn2"),
-    trainable_text_modules: Tuple[str] = ("all"),
+    trainable_modules: Tuple[str] = None, # Eg: ("attn1", "attn2")
+    trainable_text_modules: Tuple[str] = None, # Eg: ("all"), this also applies to trainable_modules
     extra_unet_params = None,
     extra_text_encoder_params = None,
     train_batch_size: int = 1,
@@ -569,9 +569,13 @@ def main(
     extra_unet_params = extra_unet_params if extra_unet_params is not None else {}
     extra_text_encoder_params = extra_unet_params if extra_unet_params is not None else {}
 
+    trainable_modules_available = trainable_modules is not None
+    trainable_text_modules_available = (train_text_encoder and trainable_text_modules is not None)
+    
     optim_params = [
-        param_optim(unet, trainable_modules is not None, extra_params=extra_unet_params, negation=unet_negation),
-        param_optim(text_encoder, train_text_encoder and not use_text_lora, extra_params=extra_text_encoder_params, 
+        param_optim(unet, trainable_modules_available, extra_params=extra_unet_params, negation=unet_negation),
+        param_optim(text_encoder, trainable_text_modules_available, 
+                        extra_params=extra_text_encoder_params, 
                         negation=text_encoder_negation
                    ),
         param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, 
@@ -830,7 +834,7 @@ def main(
                     progress_bar.update(1)
                 continue
             
-            with accelerator.accumulate(unet) ,accelerator.accumulate(text_encoder):
+            with accelerator.accumulate(unet) as _, accelerator.accumulate(text_encoder) as _:
 
                 text_prompt = batch['text_prompt'][0]
                 
@@ -844,11 +848,12 @@ def main(
                 # Backpropagate
                 try:
                     accelerator.backward(loss)
-                    params_to_clip = (
-                        unet.parameters() if not train_text_encoder 
-                    else 
-                        list(unet.parameters()) + list(text_encoder.parameters())
-                    )
+
+                    if any([train_text_encoder, use_text_lora]):
+                        params_to_clip = list(unet.parameters()) + list(text_encoder.parameters())
+                    else:
+                        params_to_clip = unet.parameters()
+
                     accelerator.clip_grad_norm_(params_to_clip, max_grad_norm)
                 
                     optimizer.step()
