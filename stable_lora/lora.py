@@ -200,7 +200,7 @@ def create_lora_linear(child_module, r, dropout=0, bias=False, scale=0):
     return loralb.Linear(
         child_module.in_features, 
         child_module.out_features, 
-        merge_weights=True,
+        merge_weights=False,
         bias=bias,
         lora_dropout=dropout,
         lora_alpha=r,
@@ -215,7 +215,7 @@ def create_lora_conv(child_module, r, dropout=0, bias=False, rescale=False, scal
         kernel_size=child_module.kernel_size[0],
         padding=child_module.padding,
         stride=child_module.stride,
-        merge_weights=True,
+        merge_weights=False,
         bias=bias,
         lora_dropout=dropout,
         lora_alpha=r,
@@ -230,7 +230,7 @@ def create_lora_conv3d(child_module, r, dropout=0, bias=False, rescale=False, sc
         kernel_size=child_module.kernel_size[0],
         padding=child_module.padding,
         stride=child_module.stride,
-        merge_weights=True,
+        merge_weights=False,
         bias=bias,
         lora_dropout=dropout,
         lora_alpha=r,
@@ -242,7 +242,7 @@ def create_lora_emb(child_module, r):
     return loralb.Embedding(
         child_module.num_embeddings, 
         child_module.embedding_dim, 
-        merge_weights=True,
+        merge_weights=False,
         lora_alpha=r,
         r=r
     )
