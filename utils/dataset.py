@@ -18,6 +18,28 @@ decord.bridge.set_bridge('torch')
 from torch.utils.data import Dataset
 from einops import rearrange, repeat
 
+    # Inspired by the VideoMAE repository.
+    def normalize_input(
+        item, 
+        mean=[0.485, 0.456, 0.406], 
+        std=[0.229, 0.224, 0.225],
+        use_simple_norm=False
+    ):
+        if item.dtype == torch.uint8 and not use_simple_norm:
+            item = rearrange(item, 'f c h w -> f h w c')
+            
+            item = item.float() / 255.0
+            mean = torch.tensor(mean)
+            std = torch.tensor(std)
+
+            out = rearrange((item - mean) / std, 'f h w c -> f c h w')
+            
+            return out
+        else:
+            # Using this method is not recommended, and should only be used 
+            # for testing purposes.
+            return  item / (127.5 - 1.0)
+            
 def get_prompt_ids(prompt, tokenizer):
     prompt_ids = tokenizer(
             prompt,
@@ -258,7 +280,7 @@ class VideoJsonDataset(Dataset):
             video, prompt, prompt_ids = self.train_data_batch(index)
 
         example = {
-            "pixel_values": (video / 127.5 - 1.0),
+            "pixel_values": normalize_input(video),
             "prompt_ids": prompt_ids[0],
             "text_prompt": prompt,
             'dataset': self.__getname__()
@@ -369,7 +391,7 @@ class SingleVideoDataset(Dataset):
         video, prompt, prompt_ids = self.single_video_batch(index)
 
         example = {
-            "pixel_values": (video / 127.5 - 1.0),
+            "pixel_values": normalize_input(video),
             "prompt_ids": prompt_ids[0],
             "text_prompt": prompt,
             'dataset': self.__getname__()
@@ -463,7 +485,7 @@ class ImageDataset(Dataset):
     def __getitem__(self, index):
         img, prompt, prompt_ids = self.image_batch(index)
         example = {
-            "pixel_values": (img / 127.5 - 1.0),
+            "pixel_values": normalize_input(img),
             "prompt_ids": prompt_ids[0],
             "text_prompt": prompt, 
             'dataset': self.__getname__()
@@ -562,7 +584,7 @@ class VideoFolderDataset(Dataset):
 
         prompt_ids = self.get_prompt_ids(prompt)
 
-        return {"pixel_values": (video[0] / 127.5 - 1.0), "prompt_ids": prompt_ids[0], "text_prompt": prompt, 'dataset': self.__getname__()}
+        return {"pixel_values": normalize_input(video[0]), "prompt_ids": prompt_ids[0], "text_prompt": prompt, 'dataset': self.__getname__()}
 
 class CachedDataset(Dataset):
     def __init__(self,cache_dir: str = ''):
