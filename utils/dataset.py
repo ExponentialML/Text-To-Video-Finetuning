@@ -18,7 +18,7 @@ decord.bridge.set_bridge('torch')
 from torch.utils.data import Dataset
 from einops import rearrange, repeat
 
-# Inspired by the VideoMAE repository.
+    # Inspired by the VideoMAE repository.
     def normalize_input(
         item, 
         mean=[0.485, 0.456, 0.406], 
@@ -35,8 +35,9 @@ from einops import rearrange, repeat
             out = rearrange((item - mean) / std, 'f h w c -> f c h w')
             
             return out
-            
         else:
+            # Using this method is not recommended, and should only be used 
+            # for testing purposes.
             return  item / (127.5 - 1.0)
             
 def get_prompt_ids(prompt, tokenizer):
