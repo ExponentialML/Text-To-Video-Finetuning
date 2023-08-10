@@ -38,7 +38,7 @@ from einops import rearrange, repeat
         else:
             # Normalize between -1 & 1
             item = rearrange(item, 'f c h w -> f h w c')
-            return  rearrange(item / (127.5 - 1.0), 'f h w c -> f c h w)
+            return  rearrange(item / (127.5 - 1.0), 'f h w c -> f c h w')
             
 def get_prompt_ids(prompt, tokenizer):
     prompt_ids = tokenizer(
