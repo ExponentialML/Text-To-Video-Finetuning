@@ -282,7 +282,8 @@ def handle_cache_latents(
         train_batch_size, 
         vae, 
         cached_latent_dir=None,
-        shuffle=False
+        shuffle=False,
+        minimum_required_frames = 0
     ):
 
     # Cache latents by storing them in VRAM. 
@@ -296,7 +297,6 @@ def handle_cache_latents(
     if cached_latent_dir is None:
         cache_save_dir = f"{output_dir}/cached_latents"
         os.makedirs(cache_save_dir, exist_ok=True)
-        minimum_required_frames = 8
 
         for i, batch in enumerate(tqdm(train_dataloader, desc="Caching Latents.")):
             if batch['pixel_values'].shape[1] > 2 and batch['pixel_values'].shape[1] < minimum_required_frames:
@@ -687,7 +687,9 @@ def main(
         train_dataloader, 
         train_batch_size, 
         vae,
-        cached_latent_dir
+        cached_latent_dir,
+        shuffle=shuffle,
+        minimum_required_frames=kwargs.get("minimum_required_frames", 0)
     ) 
 
     if cached_data_loader is not None: 
