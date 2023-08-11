@@ -341,14 +341,16 @@ def handle_cache_latents(
 
     if len(cached_dataset_list) > 1:
         print(f"Found {len(cached_dataset_list)} cached datasets. Merging...")
-        return torch.utils.data.DataLoader(
-            torch.utils.data.ConcatDataset(cached_dataset_list),
-            batch_size=train_batch_size, 
-            shuffle=shuffle,
-            num_workers=0,
-        )
+        new_cached_dataset = torch.utils.data.ConcatDataset(cached_dataset_list)
     else:
-        return cached_dataset_list[0] 
+        new_cached_dataset = cached_dataset_list[0] 
+        
+    return torch.utils.data.DataLoader(
+                new_cached_dataset,
+                batch_size=train_batch_size, 
+                shuffle=shuffle,
+                num_workers=0,
+            )
 
 def handle_trainable_modules(model, trainable_modules=None, is_enabled=True, negation=None):
     global already_printed_trainables
