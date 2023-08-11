@@ -269,7 +269,8 @@ def handle_cache_latents(
         train_dataloader, 
         train_batch_size, 
         vae, 
-        cached_latent_dir=None
+        cached_latent_dir=None,
+        shuffle=False
     ):
 
     # Cache latents by storing them in VRAM. 
@@ -308,7 +309,7 @@ def handle_cache_latents(
     return torch.utils.data.DataLoader(
         CachedDataset(cache_dir=cache_save_dir), 
         batch_size=train_batch_size, 
-        shuffle=True,
+        shuffle=shuffle,
         num_workers=0
     ) 
 
@@ -459,6 +460,7 @@ def main(
     validation_data: Dict,
     extra_train_data: list = [],
     dataset_types: Tuple[str] = ('json'),
+    shuffle: bool = True,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = None, # Eg: ("attn1", "attn2")
     trainable_text_modules: Tuple[str] = None, # Eg: ("all"), this also applies to trainable_modules
@@ -638,7 +640,7 @@ def main(
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, 
         batch_size=train_batch_size,
-        shuffle=True
+        shuffle=shuffle
     )
 
      # Latents caching
