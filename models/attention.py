@@ -133,21 +133,21 @@ class BasicTransformerBlock(nn.Module):
         self._chunk_size = chunk_size
         self._chunk_dim = dim
 
-    def create_causal_attention_mask(self, x):   
+     def create_causal_attention_mask(self, x):   
         if not self.is_causal:
             return None
 
         if not self.is_temporal:
             f, d, c = x.shape
             mask_shape = (f, d, d)
-            mask = torch.zeros(mask_shape, device=x.device, dtype=x.dtype)
+            mask = torch.ones(mask_shape, device=x.device, dtype=torch.bool)
         else:
             d, f, c = x.shape
             mask_shape = (d, f, f)
-            mask = torch.full(mask_shape, -float(10000.0), device=x.device, dtype=x.dtype)
-            mask.triu_(diagonal=0)
+            mask = torch.ones(mask_shape, device=x.device, dtype=torch.bool).tril()
 
         return mask
+
 
     def forward(
         self,
