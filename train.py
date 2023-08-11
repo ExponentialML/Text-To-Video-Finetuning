@@ -460,7 +460,7 @@ def main(
     validation_data: Dict,
     extra_train_data: list = [],
     dataset_types: Tuple[str] = ('json'),
-    shuffle: bool = False,
+    shuffle: bool = True,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = None, # Eg: ("attn1", "attn2")
     trainable_text_modules: Tuple[str] = None, # Eg: ("all"), this also applies to trainable_modules
