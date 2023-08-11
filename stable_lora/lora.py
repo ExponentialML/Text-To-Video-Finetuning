@@ -147,6 +147,7 @@ class Conv3d(nn.Conv3d, LoRALayer):
         # Get view transform shape
         i, o, k = self.weight.shape[:3]
         self.view_shape = (i, o, k, kernel_size, 1)
+        self.force_disable_merge = True
 
         if r > 0:
             self.lora_A = nn.Parameter(
@@ -169,6 +170,12 @@ class Conv3d(nn.Conv3d, LoRALayer):
 
     def train(self, mode: bool = True):
         nn.Conv3d.train(self, mode)
+
+        # HACK Merging the weights this way could potentially cause vanishing gradients if validation is enabled.
+        # If you are to save this as a pretrained model, you will have to merge these weights afterwards, then save.
+        if self.force_disable_merge:
+            return
+            
         if mode:
             if self.merge_weights and self.merged:
                 # Make sure that the weights are not merged
@@ -193,7 +200,7 @@ def create_lora_linear(child_module, r, dropout=0, bias=False, scale=0):
     return loralb.Linear(
         child_module.in_features, 
         child_module.out_features, 
-        merge_weights=True,
+        merge_weights=False,
         bias=bias,
         lora_dropout=dropout,
         lora_alpha=r,
@@ -208,7 +215,7 @@ def create_lora_conv(child_module, r, dropout=0, bias=False, rescale=False, scal
         kernel_size=child_module.kernel_size[0],
         padding=child_module.padding,
         stride=child_module.stride,
-        merge_weights=True,
+        merge_weights=False,
         bias=bias,
         lora_dropout=dropout,
         lora_alpha=r,
@@ -223,7 +230,7 @@ def create_lora_conv3d(child_module, r, dropout=0, bias=False, rescale=False, sc
         kernel_size=child_module.kernel_size[0],
         padding=child_module.padding,
         stride=child_module.stride,
-        merge_weights=True,
+        merge_weights=False,
         bias=bias,
         lora_dropout=dropout,
         lora_alpha=r,
@@ -235,7 +242,7 @@ def create_lora_emb(child_module, r):
     return loralb.Embedding(
         child_module.num_embeddings, 
         child_module.embedding_dim, 
-        merge_weights=True,
+        merge_weights=False,
         lora_alpha=r,
         r=r
     )
