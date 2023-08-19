@@ -7,7 +7,7 @@ def up_down_bucket(m_size, in_size, direction):
     if direction == 'up': return abs(int(m_size + in_size))
 
 def get_bucket_sizes(size, direction: 'down', min_size):
-    multipliers = [64, 128]
+    multipliers = [64, 128, 192]
     for i, m in enumerate(multipliers):
         res =  up_down_bucket(m, size, direction)
         multipliers[i] = min_res(res, min_size=min_size)

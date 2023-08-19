@@ -195,8 +195,8 @@ class VideoJsonDataset(Dataset):
         return idx
 
     def get_frame_buckets(self, vr):
-        _, h, w = vr[0].shape        
-        width, height = sensible_buckets(self.width, self.height, h, w)
+        h, w, c = vr[0].shape        
+        width, height = sensible_buckets(self.width, self.height, w, h)
         resize = T.transforms.Resize((height, width), antialias=True)
 
         return resize
@@ -347,8 +347,8 @@ class SingleVideoDataset(Dataset):
         return video
 
     def get_frame_buckets(self, vr):
-        _, h, w = vr[0].shape        
-        width, height = sensible_buckets(self.width, self.height, h, w)
+        h, w, c = vr[0].shape        
+        width, height = sensible_buckets(self.width, self.height, w, h)
         resize = T.transforms.Resize((height, width), antialias=True)
 
         return resize
@@ -453,7 +453,7 @@ class ImageDataset(Dataset):
         height = self.height
 
         if self.use_bucketing:
-            _, h, w = img.shape
+            h, w, c = img.shape
             width, height = sensible_buckets(width, height, w, h)
               
         resize = T.transforms.Resize((height, width), antialias=True)
@@ -520,8 +520,8 @@ class VideoFolderDataset(Dataset):
         self.fps = fps
 
     def get_frame_buckets(self, vr):
-        _, h, w = vr[0].shape        
-        width, height = sensible_buckets(self.width, self.height, h, w)
+        h, w, c = vr[0].shape        
+        width, height = sensible_buckets(self.width, self.height, w, h)
         resize = T.transforms.Resize((height, width), antialias=True)
 
         return resize
