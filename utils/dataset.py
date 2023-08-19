@@ -196,7 +196,7 @@ class VideoJsonDataset(Dataset):
 
     def get_frame_buckets(self, vr):
         h, w, _ = vr[0].shape        
-        width, height = sensible_buckets(self.width, self.height, h, w)
+        width, height = sensible_buckets(self.width, self.height, w, h)
         resize = T.transforms.Resize((height, width), antialias=True)
 
         return resize
@@ -348,7 +348,7 @@ class SingleVideoDataset(Dataset):
 
     def get_frame_buckets(self, vr):
         h, w, _ = vr[0].shape        
-        width, height = sensible_buckets(self.width, self.height, h, w)
+        width, height = sensible_buckets(self.width, self.height, w, h)
         resize = T.transforms.Resize((height, width), antialias=True)
 
         return resize
