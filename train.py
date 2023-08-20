@@ -859,8 +859,15 @@ def main(
                     else:
                         params_to_clip = unet.parameters()
 
-                    accelerator.clip_grad_norm_(params_to_clip, max_grad_norm)
-                
+                    if max_grad_norm > 0:
+                        if accelerator.sync_gradients:
+                            if any([train_text_encoder, use_text_lora]):
+                                params_to_clip = list(unet.parameters()) + list(text_encoder.parameters())
+                            else:
+                                params_to_clip = list(unet.parameters())
+                                
+                            accelerator.clip_grad_norm_(params_to_clip, max_grad_norm)
+                            
                     optimizer.step()
                     lr_scheduler.step()
                     optimizer.zero_grad(set_to_none=True)
