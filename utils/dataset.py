@@ -21,8 +21,8 @@ from einops import rearrange, repeat
     # Inspired by the VideoMAE repository.
     def normalize_input(
         item, 
-        mean=[0.485, 0.456, 0.406], 
-        std=[0.229, 0.224, 0.225],
+        mean=[0.5, 0.5, 0.5], # Imagenet [0.485, 0.456, 0.406]
+        std=[0.5, 0.5, 0.5], # Imagenet [0.229, 0.224, 0.225]
         use_simple_norm=False
     ):
         if item.dtype == torch.uint8 and not use_simple_norm:
@@ -36,7 +36,7 @@ from einops import rearrange, repeat
             
             return out
         else:
-            # Normalize between -1 & 1
+            
             item = rearrange(item, 'f c h w -> f h w c')
             return  rearrange(item / (127.5 - 1.0), 'f h w c -> f c h w')
             
