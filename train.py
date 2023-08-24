@@ -334,7 +334,7 @@ def handle_trainable_modules(model, trainable_modules=None, is_enabled=True, neg
                         
     if unfrozen_params > 0 and not already_printed_trainables:
         already_printed_trainables = True 
-        print(f"{unfrozen_params} params have been unfrozen for training.")
+        print(f"{unfrozen_params} params have been processed.")
 
 def tensor_to_vae_latent(t, vae):
     video_length = t.shape[1]
