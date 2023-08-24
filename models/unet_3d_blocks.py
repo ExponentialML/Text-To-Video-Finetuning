@@ -23,7 +23,7 @@ from diffusers.models.transformer_temporal import TransformerTemporalModel
 g_c = checkpoint.checkpoint
 
 def is_video(num_frames, only_video=True): 
-    if num_frames == 1 and not enabled:
+    if num_frames == 1 and not only_video:
         return False
     return num_frames > 1
 
