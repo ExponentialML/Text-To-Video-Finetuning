@@ -22,15 +22,15 @@ from diffusers.models.transformer_temporal import TransformerTemporalModel
 # Assign gradient checkpoint function to simple variable for readability.
 g_c = checkpoint.checkpoint
 
-def use_temporal(module, num_frames, x):
-    if num_frames == 1:
-        if isinstance(module, TransformerTemporalModel):
-            return {"sample": x}
-        else:
-            return x
+def is_video(num_frames, only_video=True): 
+    if num_frames == 1 and not only_video:
+        return False
+    return num_frames > 1
 
 def custom_checkpoint(module, mode=None):
-    if mode == None: raise ValueError('Mode for gradient checkpointing cannot be none.')
+    if mode == None: 
+        raise ValueError('Mode for gradient checkpointing cannot be none.')
+        
     custom_forward = None
 
     if mode == 'resnet':
@@ -42,31 +42,39 @@ def custom_checkpoint(module, mode=None):
         def custom_forward(
             hidden_states, 
             encoder_hidden_states=None, 
-            cross_attention_kwargs=None
+            cross_attention_kwargs=None,
+            attention_mask=None,
         ):
             inputs = module(
                 hidden_states,
                 encoder_hidden_states,
-                cross_attention_kwargs
+                cross_attention_kwargs,
+                attention_mask
             )
-            return inputs
+            return inputs.sample
 
     if mode == 'temp':
-         def custom_forward(hidden_states, num_frames=None):
-            inputs = use_temporal(module, num_frames, hidden_states)
-            if inputs is None: inputs = module(
-                hidden_states, 
-                num_frames=num_frames
-            )
-            return inputs
+        # If inputs are not None, we can assume that this was a single image.
+        # Otherwise, do temporal convolutions / attention.
+        def custom_forward(hidden_states, num_frames=None):
+            if not is_video(num_frames):
+                return inputs
+            else:
+                inputs = module(
+                    hidden_states,
+                    num_frames=num_frames
+                )
+                if isinstance(module, TransformerTemporalModel):
+                    return inputs.sample
+                else:
+                    return inputs
 
     return custom_forward
 
 def transformer_g_c(transformer, sample, num_frames):
     sample = g_c(custom_checkpoint(transformer, mode='temp'), 
-        sample, num_frames, use_reentrant=False
-    )['sample']
-
+        sample, num_frames, use_reentrant=False,
+    )
     return sample
 
 def cross_attn_g_c(
@@ -79,43 +87,68 @@ def cross_attn_g_c(
         cross_attention_kwargs, 
         temb, 
         num_frames,
-        inverse_temp=False
+        inverse_temp=False,
+        attention_mask=None,
     ):
     
     def ordered_g_c(idx):
 
         # Self and CrossAttention
-        if idx == 0: return g_c(custom_checkpoint(attn, mode='attn'),
-            hidden_states, encoder_hidden_states,cross_attention_kwargs, use_reentrant=False
-        )['sample']
+        if idx == 0: 
+            return g_c(custom_checkpoint(attn, mode='attn'),
+            hidden_states, 
+            encoder_hidden_states, 
+            cross_attention_kwargs, 
+            attention_mask, 
+            use_reentrant=False
+        )
 
         # Temporal Self and CrossAttention
-        if idx == 1: return g_c(custom_checkpoint(temp_attn, mode='temp'), 
-            hidden_states, num_frames, use_reentrant=False)['sample']
-
+        if idx == 1: 
+            return g_c(custom_checkpoint(temp_attn, mode='temp'), 
+            hidden_states, 
+            num_frames, 
+            use_reentrant=False
+        )
+        
         # Resnets
-        if idx == 2: return g_c(custom_checkpoint(resnet, mode='resnet'), 
-            hidden_states, temb, use_reentrant=False)
+        if idx == 2: 
+            return g_c(custom_checkpoint(resnet, mode='resnet'), 
+            hidden_states, 
+            temb, 
+            use_reentrant=False
+        )
         
         # Temporal Convolutions
-        if idx == 3: return g_c(custom_checkpoint(temp_conv, mode='temp'), 
-            hidden_states, num_frames, use_reentrant=False
-    )
+        if idx == 3:
+            return g_c(custom_checkpoint(temp_conv, mode='temp'), 
+            hidden_states, 
+            num_frames, 
+            use_reentrant=False
+        )
 
     # Here we call the function depending on the order in which they are called. 
     # For some layers, the orders are different, so we access the appropriate one by index.
     
     if not inverse_temp:
-        for idx in [0,1,2,3]: hidden_states = ordered_g_c(idx) 
+        for idx in [0,1,2,3]: 
+            hidden_states = ordered_g_c(idx) 
     else:
-        for idx in [2,3,0,1]: hidden_states = ordered_g_c(idx)
+        for idx in [2,3,0,1]:
+             hidden_states = ordered_g_c(idx)
 
     return hidden_states
 
 def up_down_g_c(resnet, temp_conv, hidden_states, temb, num_frames):
-    hidden_states = g_c(custom_checkpoint(resnet, mode='resnet'), hidden_states, temb, use_reentrant=False)
+    hidden_states = g_c(custom_checkpoint(resnet, mode='resnet'), 
+        hidden_states, 
+        temb, 
+        use_reentrant=False
+    )
     hidden_states = g_c(custom_checkpoint(temp_conv, mode='temp'), 
-        hidden_states, num_frames,  use_reentrant=False
+        hidden_states, 
+        num_frames, 
+        use_reentrant=False
     )
     return hidden_states
 
