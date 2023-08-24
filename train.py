@@ -315,22 +315,22 @@ def handle_cache_latents(
 
 def handle_trainable_modules(model, trainable_modules=None, is_enabled=True, negation=None):
     global already_printed_trainables
-
-    # This can most definitely be refactored :-)
+    acc = []
     unfrozen_params = 0
+    
     if trainable_modules is not None:
-        for name, module in model.named_modules():
-            for tm in tuple(trainable_modules):
-                if tm == 'all':
-                    model.requires_grad_(is_enabled)
-                    unfrozen_params =len(list(model.parameters()))
-                    break
-                    
-                if tm in name and 'lora' not in name:
-                    for m in module.parameters():
-                        m.requires_grad_(is_enabled)
-                        if is_enabled: unfrozen_params +=1
-
+        unlock_all = [name == 'all' for name in trainable_modules]
+        if unlock_all[0]:
+            model.requires_grad_(True)
+        else:
+            model.requires_grad_(False)
+            for name, param in model.named_parameters():
+                for tm in trainable_modules:
+                    if tm in name and name not in acc:
+                        param.requires_grad_(is_enabled)
+                        acc.append(name)
+                        unfrozen_params += 1
+                        
     if unfrozen_params > 0 and not already_printed_trainables:
         already_printed_trainables = True 
         print(f"{unfrozen_params} params have been unfrozen for training.")
