@@ -319,7 +319,7 @@ def handle_trainable_modules(model, trainable_modules=None, is_enabled=True, neg
     unfrozen_params = 0
     
     if trainable_modules is not None:
-        unlock_all = any([name == 'all' in trainable_modules for name in trainable_modules])
+        unlock_all = any([name == 'all' for name in trainable_modules])
         if unlock_all:
             model.requires_grad_(True)
             unfrozen_params = len(list(model.parameters()))
