@@ -327,7 +327,7 @@ def handle_trainable_modules(model, trainable_modules=None, is_enabled=True, neg
             model.requires_grad_(False)
             for name, param in model.named_parameters():
                 for tm in trainable_modules:
-                    if tm in name and name not in acc:
+                    if all([tm in name, name not in acc, 'lora' not in name]):
                         param.requires_grad_(is_enabled)
                         acc.append(name)
                         unfrozen_params += 1
