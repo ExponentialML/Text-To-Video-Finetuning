@@ -73,7 +73,7 @@ def custom_checkpoint(module, mode=None):
 
 def transformer_g_c(transformer, sample, num_frames):
     sample = g_c(custom_checkpoint(transformer, mode='temp'), 
-        sample, num_frames, use_reentrant=True,
+        sample, num_frames, use_reentrant=False,
     )
     return sample
 
@@ -100,7 +100,7 @@ def cross_attn_g_c(
             encoder_hidden_states, 
             cross_attention_kwargs, 
             attention_mask, 
-            use_reentrant=True
+            use_reentrant=False
         )
 
         # Temporal Self and CrossAttention
@@ -108,7 +108,7 @@ def cross_attn_g_c(
             return g_c(custom_checkpoint(temp_attn, mode='temp'), 
             hidden_states, 
             num_frames, 
-            use_reentrant=True
+            use_reentrant=False
         )
         
         # Resnets
@@ -116,7 +116,7 @@ def cross_attn_g_c(
             return g_c(custom_checkpoint(resnet, mode='resnet'), 
             hidden_states, 
             temb, 
-            use_reentrant=True
+            use_reentrant=False
         )
         
         # Temporal Convolutions
@@ -124,7 +124,7 @@ def cross_attn_g_c(
             return g_c(custom_checkpoint(temp_conv, mode='temp'), 
             hidden_states, 
             num_frames, 
-            use_reentrant=True
+            use_reentrant=False
         )
 
     # Here we call the function depending on the order in which they are called. 
@@ -143,12 +143,12 @@ def up_down_g_c(resnet, temp_conv, hidden_states, temb, num_frames):
     hidden_states = g_c(custom_checkpoint(resnet, mode='resnet'), 
         hidden_states, 
         temb, 
-        use_reentrant=True
+        use_reentrant=False
     )
     hidden_states = g_c(custom_checkpoint(temp_conv, mode='temp'), 
         hidden_states, 
         num_frames, 
-        use_reentrant=True
+        use_reentrant=False
     )
     return hidden_states
 
