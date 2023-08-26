@@ -734,6 +734,8 @@ def main(
                 is_enabled=True,
                 negation=unet_negation
             )
+            if lora_manager.use_unet_lora:
+                unet.conv_in.requires_grad_(True)
 
         # Convert videos to latent space
         pixel_values = batch["pixel_values"]
