@@ -58,7 +58,7 @@ def custom_checkpoint(module, mode=None):
         # Otherwise, do temporal convolutions / attention.
         def custom_forward(hidden_states, num_frames=None):
             if not is_video(num_frames):
-                return inputs
+                return hidden_states
             else:
                 inputs = module(
                     hidden_states,
