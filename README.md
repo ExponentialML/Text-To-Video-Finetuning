@@ -251,3 +251,14 @@ If you want to use the V1 repository, you can use the branch [here](https://gith
 - [kabachuha](https://github.com/kabachuha) for their conversion scripts, training ideas, and webui works.
 - [JCBrouwer](https://github.com/JCBrouwer) Inference implementations.
 - [sergiobr](https://github.com/sergiobr) Helpful ideas and bug fixes.
+
+## Citation
+If you find this work interesting, consider citing the original [ModelScope Text-to-Video Technical Report](https://arxiv.org/abs/2308.06571):
+```bibtex
+@article{ModelScopeT2V,
+  title={ModelScope Text-to-Video Technical Report},
+  author={Wang, Jiuniu and Yuan, Hangjie and Chen, Dayou and Zhang, Yingya and Wang, Xiang and Zhang, Shiwei},
+  journal={arXiv preprint arXiv:2308.06571},
+  year={2023}
+}
+```
