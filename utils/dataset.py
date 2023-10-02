@@ -19,7 +19,7 @@ from torch.utils.data import Dataset
 from einops import rearrange, repeat
 
     # Inspired by the VideoMAE repository.
-    def normalize_input(
+def normalize_input(
         item, 
         mean=[0.5, 0.5, 0.5], # Imagenet [0.485, 0.456, 0.406]
         std=[0.5, 0.5, 0.5], # Imagenet [0.229, 0.224, 0.225]
