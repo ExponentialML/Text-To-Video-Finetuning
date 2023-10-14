@@ -585,10 +585,10 @@ def main(
                         negation=text_encoder_negation
                    ),
         param_optim(text_encoder_lora_params, use_text_lora, is_lora=True, 
-                        extra_params={**{"lr": learning_rate}, **extra_unet_params}
+                        extra_params={**{"lr": learning_rate}, **extra_text_encoder_params}
                     ),
         param_optim(unet_lora_params, use_unet_lora, is_lora=True, 
-                        extra_params={**{"lr": learning_rate}, **extra_text_encoder_params}
+                        extra_params={**{"lr": learning_rate}, **extra_unet_params}
                     )
     ]
 
