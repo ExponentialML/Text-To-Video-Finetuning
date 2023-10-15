@@ -782,6 +782,11 @@ def main(
             
         # Encode text embeddings
         token_ids = batch['prompt_ids']
+
+        # Assume extra batch dimnesion.
+        if len(token_ids.shape) > 2:
+            token_ids = token_ids[0]
+            
         encoder_hidden_states = text_encoder(token_ids, output_hidden_states=True)
         encoder_hidden_states = encoder_hidden_states.hidden_states[-2]
 
