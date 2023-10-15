@@ -782,7 +782,8 @@ def main(
             
         # Encode text embeddings
         token_ids = batch['prompt_ids']
-        encoder_hidden_states = text_encoder(token_ids)[0]
+        encoder_hidden_states = text_encoder(token_ids, output_hidden_states=True)
+        encoder_hidden_states = encoder_hidden_states.hidden_states[-2]
 
         # Get the target for loss depending on the prediction type
         if noise_scheduler.prediction_type == "epsilon":
