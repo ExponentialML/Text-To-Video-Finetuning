@@ -281,7 +281,7 @@ class VideoJsonDataset(Dataset):
 
         example = {
             "pixel_values": normalize_input(video),
-            "prompt_ids": prompt_ids[0],
+            "prompt_ids": prompt_ids,
             "text_prompt": prompt,
             'dataset': self.__getname__()
         }
@@ -392,7 +392,7 @@ class SingleVideoDataset(Dataset):
 
         example = {
             "pixel_values": normalize_input(video),
-            "prompt_ids": prompt_ids[0],
+            "prompt_ids": prompt_ids,
             "text_prompt": prompt,
             'dataset': self.__getname__()
         }
@@ -486,7 +486,7 @@ class ImageDataset(Dataset):
         img, prompt, prompt_ids = self.image_batch(index)
         example = {
             "pixel_values": normalize_input(img),
-            "prompt_ids": prompt_ids[0],
+            "prompt_ids": prompt_ids,
             "text_prompt": prompt, 
             'dataset': self.__getname__()
         }
@@ -584,7 +584,7 @@ class VideoFolderDataset(Dataset):
 
         prompt_ids = self.get_prompt_ids(prompt)
 
-        return {"pixel_values": normalize_input(video[0]), "prompt_ids": prompt_ids[0], "text_prompt": prompt, 'dataset': self.__getname__()}
+        return {"pixel_values": normalize_input(video[0]), "prompt_ids": prompt_ids, "text_prompt": prompt, 'dataset': self.__getname__()}
 
 class CachedDataset(Dataset):
     def __init__(self,cache_dir: str = ''):
