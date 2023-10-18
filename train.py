@@ -787,8 +787,7 @@ def main(
         if len(token_ids.shape) > 2:
             token_ids = token_ids[0]
             
-        encoder_hidden_states = text_encoder(token_ids, output_hidden_states=True)
-        encoder_hidden_states = encoder_hidden_states.hidden_states[-2]
+        encoder_hidden_states = text_encoder(token_ids)[0]
 
         # Get the target for loss depending on the prediction type
         if noise_scheduler.prediction_type == "epsilon":
