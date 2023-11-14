@@ -717,6 +717,7 @@ def main(
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
+    writer = SummaryWriter()
 
     def finetune_unet(batch, train_encoder=False):
         nonlocal use_offset_noise
@@ -836,7 +837,6 @@ def main(
 
         return loss, latents
 
-    writer = SummaryWriter()
     for epoch in range(first_epoch, num_train_epochs):
         train_loss = 0.0
         
@@ -961,12 +961,11 @@ def main(
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             accelerator.log({"training_loss": loss.detach().item()}, step=step)
-            writer.add_scalar('Loss/train', loss.detach().item(), step)
+            writer.add_scalar('Loss/train', loss.detach().item(), global_step)
             progress_bar.set_postfix(**logs)
 
             if global_step >= max_train_steps:
                 break
-    writer.close()
 
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
