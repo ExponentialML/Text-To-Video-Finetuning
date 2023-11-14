@@ -15,9 +15,6 @@ output_dir: "./outputs"
 # 'json': The JSON file created with automatic BLIP2 captions using https://github.com/ExponentialML/Video-BLIP2-Preprocessor
 # 'single_video': A single video file.mp4 and text prompt
 dataset_types: 
-  - 'image'
-  - 'folder'
-  - 'json'
   - 'single_video'
 
 # Adds offset noise to training. See https://www.crosslabs.org/blog/diffusion-with-offset-noise
@@ -49,7 +46,7 @@ train_text_encoder: False
 use_unet_lora: False
 
 # Use LoRA for the Text Encoder.
-use_text_lora: True
+use_text_lora: False
 
 # The modules to use for LoRA. Different from 'trainable_modules'.
 unet_lora_modules:
@@ -84,13 +81,13 @@ train_data:
   frame_step: 5
 
   # The number of frames to sample. The higher this number, the higher the VRAM (acts similar to batch size).
-  n_sample_frames: 2
+  n_sample_frames: 4
   
   # 'single_video'
-  single_video_path: "path/to/single/video.mp4"
+  single_video_path: "/home/xinzhi/Text-To-Video-Finetuning/input/v_SoccerJuggling_g16_c01.mp4"
 
   # The prompt when using a a single video file
-  single_video_prompt: ""
+  single_video_prompt: "A person is playing soccer."
 
   # Fallback prompt if caption cannot be read. Enabled for 'image' and 'folder'.
   fallback_prompt: ''
@@ -149,13 +146,13 @@ extra_text_encoder_params: null
 train_batch_size: 1
 
 # Maximum number of train steps. Model is saved after training.
-max_train_steps: 10000
+max_train_steps: 20000
 
 # Saves a model every nth step.
 checkpointing_steps: 2500
 
 # How many steps to do for validation if sample_preview is enabled.
-validation_steps: 100
+validation_steps: 1000
 
 # Which modules we want to unfreeze for the UNET. Advanced usage.
 trainable_modules:

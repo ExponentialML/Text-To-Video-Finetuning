@@ -25,6 +25,7 @@ from tqdm.auto import tqdm
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
+from torch.utils.tensorboard import SummaryWriter
 
 from models.unet_3d_condition import UNet3DConditionModel
 from diffusers.models import AutoencoderKL
@@ -835,6 +836,7 @@ def main(
 
         return loss, latents
 
+    writer = SummaryWriter()
     for epoch in range(first_epoch, num_train_epochs):
         train_loss = 0.0
         
@@ -959,10 +961,12 @@ def main(
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             accelerator.log({"training_loss": loss.detach().item()}, step=step)
+            writer.add_scalar('Loss/train', loss.detach().item(), step)
             progress_bar.set_postfix(**logs)
 
             if global_step >= max_train_steps:
                 break
+    writer.close()
 
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
