@@ -26,7 +26,7 @@
 ### Requirements & Installation
 
 ```bash
-git clone https://github.com/ExponentialML/Text-To-Video-Finetuning.git
+git clone git@github.com:xfanac/Text-To-Video-Finetuning.git
 cd Text-To-Video-Finetuning
 git lfs install
 git clone https://huggingface.co/damo-vilab/text-to-video-ms-1.7b ./models/model_scope_diffusers/
