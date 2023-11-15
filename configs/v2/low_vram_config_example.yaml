@@ -87,7 +87,7 @@ train_data:
   single_video_path: "/home/xinzhi/Text-To-Video-Finetuning/input/v_SoccerJuggling_g16_c01.mp4"
 
   # The prompt when using a a single video file
-  single_video_prompt: "A person is playing soccer."
+  single_video_prompt: "A sks person is playing soccer."
 
   # Fallback prompt if caption cannot be read. Enabled for 'image' and 'folder'.
   fallback_prompt: ''
