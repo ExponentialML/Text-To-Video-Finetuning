@@ -344,6 +344,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--prompt", type=str, required=True, help="Text prompt to condition on")
     parser.add_argument("-n", "--negative-prompt", type=str, default=None, help="Text prompt to condition against")
     parser.add_argument("-o", "--output-dir", type=str, default="./output", help="Directory to save output video to")
+    parser.add_argument("-pf", "--suffix", type=str, default=None, help="Suffix to the video file name")
     parser.add_argument("-B", "--batch-size", type=int, default=1, help="Batch size for inference")
     parser.add_argument("-W", "--width", type=int, default=256, help="Width of output video")
     parser.add_argument("-H", "--height", type=int, default=256, help="Height of output video")
@@ -375,7 +376,8 @@ if __name__ == "__main__":
         out_name += f"[({Path(args.init_video).stem}) x {args.init_weight}] "
     prompt = re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", args.prompt) if platform.system() == "Windows" else args.prompt
     out_name += f"{prompt}"
-
+    if args.suffix is not None:
+        out_name += args.suffix
     args.prompt = [prompt] * args.batch_size
     if args.negative_prompt is not None:
         args.negative_prompt = [args.negative_prompt] * args.batch_size
