@@ -15,3 +15,4 @@ opencv-python
 pydantic
 compel
 tensorboard
+pytest
