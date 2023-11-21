@@ -15,7 +15,7 @@ output_dir: "./outputs"
 # 'json': The JSON file created with automatic BLIP2 captions using https://github.com/ExponentialML/Video-BLIP2-Preprocessor
 # 'single_video': A single video file.mp4 and text prompt
 dataset_types: 
-  - 'single_video'
+  - 'folder'
 
 # Adds offset noise to training. See https://www.crosslabs.org/blog/diffusion-with-offset-noise
 offset_noise_strength: 0.1
@@ -82,18 +82,12 @@ train_data:
 
   # The number of frames to sample. The higher this number, the higher the VRAM (acts similar to batch size).
   n_sample_frames: 4
-  
-  # 'single_video'
-  single_video_path: "./input/v_SoccerJuggling_g16_c01.mp4"
-
-  # The prompt when using a a single video file
-  single_video_prompt: "A sks person is playing soccer."
 
   # Fallback prompt if caption cannot be read. Enabled for 'image' and 'folder'.
   fallback_prompt: ''
   
   # 'folder'
-  path: "path/to/folder/of/videos/"
+  path: "./input/data/"
 
   # 'json'
   json_path: 'path/to/train/json/'
@@ -146,13 +140,13 @@ extra_text_encoder_params: null
 train_batch_size: 1
 
 # Maximum number of train steps. Model is saved after training.
-max_train_steps: 8000
+max_train_steps: 3000
 
 # Saves a model every nth step.
-checkpointing_steps: 1000
+checkpointing_steps: 500
 
 # How many steps to do for validation if sample_preview is enabled.
-validation_steps: 1000
+validation_steps: 500
 
 # Which modules we want to unfreeze for the UNET. Advanced usage.
 trainable_modules:
