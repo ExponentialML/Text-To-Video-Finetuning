@@ -19,3 +19,4 @@ pytest
 clip==1.0
 Pillow
 scipy
+
