@@ -16,3 +16,6 @@ pydantic
 compel
 tensorboard
 pytest
+clip==1.0
+Pillow
+scipy
