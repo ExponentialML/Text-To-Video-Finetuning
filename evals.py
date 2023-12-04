@@ -66,6 +66,7 @@ def main(image_path):
     # fid_score = calculate_fid_score(image_path, model)
     # print(f"FID Score: {fid_score}")
 
+
 if __name__ == "__main__":
     import sys
     image_path = sys.argv[1]
