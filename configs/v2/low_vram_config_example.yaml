@@ -146,10 +146,10 @@ extra_text_encoder_params: null
 train_batch_size: 1
 
 # Maximum number of train steps. Model is saved after training.
-max_train_steps: 20000
+max_train_steps: 8000
 
 # Saves a model every nth step.
-checkpointing_steps: 2500
+checkpointing_steps: 1000
 
 # How many steps to do for validation if sample_preview is enabled.
 validation_steps: 1000
