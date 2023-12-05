@@ -3,7 +3,7 @@ import clip
 import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
-from torchvision.models import inception_v3 #, InceptionV3_Weights
+from torchvision.models import inception_v3 
 from scipy import linalg
 from moviepy.editor import VideoFileClip
 import random
@@ -11,10 +11,10 @@ import os
 
 def load_and_preprocess_image(image_path, metric="CLIP"):
     if metric == "FID":
-        temp_shape = (299, 299)  # InceptionV3 expects 299x299 inputs
+        temp_shape = (299, 299)  # 299x299 for InceptionV3
         norm_params = [(0.485, 0.456, 0.406), (0.229, 0.224, 0.225)]
     else:
-        temp_shape = (224, 224)  # Resize to 224x224 for CLIP
+        temp_shape = (224, 224)  # 224x224 for CLIP
         norm_params = [(0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)]
     preprocess = transforms.Compose([
         transforms.Resize(temp_shape),  
@@ -77,22 +77,36 @@ def calculate_fid_score(image_paths1, image_paths2, inception_model, device):
     return fid
 
 def extract_random_frames(video_path, output_dir, num_frames=10):
-    # Create the output directory if it doesn't exist
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # Load the video file
     clip = VideoFileClip(video_path)
     duration = clip.duration
 
-    # Generate random times (in seconds)
+    # generate random times (in seconds)
     times = random.sample(range(int(duration)), num_frames)
 
     for i, time in enumerate(times):
-        # Extract the frame at the random time
+        # extract the frame at the random time
         frame = clip.get_frame(time)
+        output_file_path = os.path.join(output_dir, f'frame_{i}.jpeg')
+        clip.save_frame(output_file_path, t=time)
+        # print(f"Frame {i} (at time {time}s) written to {output_file_path}")
 
-        # Save the frame
+def extract_frames_every_half_second(video_path, output_dir, sample_rate=2):
+    # sample rate is the number of frames taken per second
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    clip = VideoFileClip(video_path)
+    duration = clip.duration
+
+    # generate times at intervals
+    times = [i * (1/sample_rate) for i in range(int(duration / 0.5))]
+
+    for i, time in enumerate(times):
+        # extract the frame at the specified time
+        frame = clip.get_frame(time)
         output_file_path = os.path.join(output_dir, f'frame_{i}.jpeg')
         clip.save_frame(output_file_path, t=time)
         # print(f"Frame {i} (at time {time}s) written to {output_file_path}")
@@ -109,33 +123,28 @@ def get_filenames(directory):
         print(f"An error occurred: {e}")
         return []
 
-
 def main():
 
     target_video_path = 'input/v_SoccerJuggling_g16_c01.mp4'
     reference_video_path = 'input/v_SoccerJuggling_g16_c01.mp4'
     
     target_output_dir = 'output/target/'
-    extract_random_frames(target_video_path, target_output_dir)
+    # extract_random_frames(target_video_path, target_output_dir)
+    extract_frames_every_half_second(target_video_path, target_output_dir)
     
     reference_output_dir = 'output/reference/'
-    extract_random_frames(reference_video_path, reference_output_dir)
-
-    # Define paths to your sets of images
+    # extract_random_frames(reference_video_path, reference_output_dir)
+    extract_frames_every_half_second(reference_video_path, reference_output_dir)
+    
     target_image_paths = get_filenames(target_output_dir)
-    # ['sample_images/charlie_1.jpeg',  'sample_images/charlie_2.jpeg']
     reference_image_paths = get_filenames(reference_output_dir)  # Assuming the same number of images in each set
-    # ['sample_images/charlie_1.jpeg', 'sample_images/charlie_2.jpeg']
     # print("target files: ", target_image_paths)
     # print("reference files: ", reference_image_paths)
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, preprocess = clip.load("ViT-B/32", device=device)
-
-    # Load the InceptionV3 model with pretrained weights
     inception_model = inception_v3(pretrained=True).to(device)
-    # inception_model = inception_v3(weights=InceptionV3_Weights.IMAGENET1K_V1).to(device)
-
+    
     clip_score = calculate_clip_score(target_image_paths[0], model, preprocess)
     print(f"CLIP Score: {clip_score}")
 
