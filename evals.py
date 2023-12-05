@@ -5,6 +5,9 @@ from PIL import Image
 import torchvision.transforms as transforms
 from torchvision.models import inception_v3 #, InceptionV3_Weights
 from scipy import linalg
+from moviepy.editor import VideoFileClip
+import random
+import os
 
 def load_and_preprocess_image(image_path, metric="CLIP"):
     if metric == "FID":
@@ -73,14 +76,59 @@ def calculate_fid_score(image_paths1, image_paths2, inception_model, device):
     fid = ssdiff + np.trace(sigma1 + sigma2 - 2 * covmean)
     return fid
 
+def extract_random_frames(video_path, output_dir, num_frames=10):
+    # Create the output directory if it doesn't exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Load the video file
+    clip = VideoFileClip(video_path)
+    duration = clip.duration
+
+    # Generate random times (in seconds)
+    times = random.sample(range(int(duration)), num_frames)
+
+    for i, time in enumerate(times):
+        # Extract the frame at the random time
+        frame = clip.get_frame(time)
+
+        # Save the frame
+        output_file_path = os.path.join(output_dir, f'frame_{i}.jpeg')
+        clip.save_frame(output_file_path, t=time)
+        # print(f"Frame {i} (at time {time}s) written to {output_file_path}")
+
+def get_filenames(directory):
+    try:
+        files_and_dirs = os.listdir(directory)
+        filenames = [directory + f for f in files_and_dirs if os.path.isfile(os.path.join(directory, f))]
+        return filenames
+    except FileNotFoundError:
+        print(f"The directory {directory} was not found.")
+        return []
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
+
+
 def main():
 
+    target_video_path = 'input/v_SoccerJuggling_g16_c01.mp4'
+    reference_video_path = 'input/v_SoccerJuggling_g16_c01.mp4'
+    
+    target_output_dir = 'output/target/'
+    extract_random_frames(target_video_path, target_output_dir)
+    
+    reference_output_dir = 'output/reference/'
+    extract_random_frames(reference_video_path, reference_output_dir)
+
     # Define paths to your sets of images
-    target_image_paths = ['sample_images/charlie_1.jpeg', 
-                          'sample_images/charlie_2.jpeg']
-    reference_image_paths = ['sample_images/charlie_1.jpeg', 
-                             'sample_images/charlie_2.jpeg']
-        
+    target_image_paths = get_filenames(target_output_dir)
+    # ['sample_images/charlie_1.jpeg',  'sample_images/charlie_2.jpeg']
+    reference_image_paths = get_filenames(reference_output_dir)  # Assuming the same number of images in each set
+    # ['sample_images/charlie_1.jpeg', 'sample_images/charlie_2.jpeg']
+    # print("target files: ", target_image_paths)
+    # print("reference files: ", reference_image_paths)
+    
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, preprocess = clip.load("ViT-B/32", device=device)
 
