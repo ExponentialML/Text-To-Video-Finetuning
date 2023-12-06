@@ -124,9 +124,15 @@ def get_filenames(directory):
         return []
 
 def main():
-
-    target_video_path = 'input/v_SoccerJuggling_g16_c01.mp4'
-    reference_video_path = 'input/v_SoccerJuggling_g16_c01.mp4'
+    
+    # TODO: add real = ".mp4"
+    baseline = "A dog is running_dog_benchmark_1701400404_900 7c814e22.mp4"
+    unique_token = "A dog is running_unique_token_dog_only_1701671770_900 1aa49d2e.mp4"
+    l1 = "A dog is running_dog_unique_token_class_preservation_loss_1701399359_900 245d7438.mp4"
+    l2 = "A dog is running_unique-token-class-preservation-loss-lambda-0_31701406141_900 679852e4.mp4"
+    
+    target_video_path = "input/" + baseline
+    reference_video_path = "input/" + l2
     
     target_output_dir = 'output/target/'
     # extract_random_frames(target_video_path, target_output_dir)
