@@ -29,24 +29,36 @@ def inception_features(images, inception_model):
     with torch.no_grad():
         return inception_model(images).detach().cpu().numpy()
 
-def calculate_clip_score(image_path, model, preprocess, text="a photo"):
+import torch
+import numpy as np
+
+def calculate_clip_scores(directory, model, preprocess, text="a photo"):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    image = load_and_preprocess_image(image_path)
-    image = image.to(device)
+    text_tokens = clip.tokenize([text]).to(device)
     
-    # Debug: Print the shape of the image tensor
-    print("Shape of preprocessed image:", image.shape)
-
-    text = clip.tokenize([text]).to(device)
-
     with torch.no_grad():
-        image_features = model.encode_image(image)
-        text_features = model.encode_text(text)
+        text_features = model.encode_text(text_tokens)
 
-        logits_per_image, logits_per_text = model(image, text)
-        probs = logits_per_image.softmax(dim=-1).cpu().numpy()
+    scores = []
 
-    return probs
+    if not os.path.isdir(directory):
+        raise ValueError(f"The provided path '{directory}' is not a directory.")
+
+    image_paths = [os.path.join(directory, file) for file in os.listdir(directory)
+                   if file.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif'))]
+
+    for image_path in image_paths:
+        image = load_and_preprocess_image(image_path)
+        image = image.to(device)
+
+        with torch.no_grad():
+            image_features = model.encode_image(image)
+
+            cos_similarity = torch.nn.functional.cosine_similarity(text_features, image_features)
+            scores.append(cos_similarity.cpu().numpy())
+
+    average_score = np.mean(scores)
+    return average_score
 
 def calculate_fid_score(image_paths1, image_paths2, inception_model, device):
     # Process and extract features for the first set of images
@@ -93,7 +105,7 @@ def extract_random_frames(video_path, output_dir, num_frames=10):
         clip.save_frame(output_file_path, t=time)
         # print(f"Frame {i} (at time {time}s) written to {output_file_path}")
 
-def extract_frames_every_half_second(video_path, output_dir, sample_rate=2):
+def extract_frames_every_half_second(video_path, output_dir, sample_rate=10):
     # sample rate is the number of frames taken per second
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -102,7 +114,8 @@ def extract_frames_every_half_second(video_path, output_dir, sample_rate=2):
     duration = clip.duration
 
     # generate times at intervals
-    times = [i * (1/sample_rate) for i in range(int(duration / 0.5))]
+    sr = 1/sample_rate
+    times = [i * (sr) for i in range(int(duration / sr))]
 
     for i, time in enumerate(times):
         # extract the frame at the specified time
@@ -111,10 +124,13 @@ def extract_frames_every_half_second(video_path, output_dir, sample_rate=2):
         clip.save_frame(output_file_path, t=time)
         # print(f"Frame {i} (at time {time}s) written to {output_file_path}")
 
-def get_filenames(directory):
+def get_filenames(directory, valid_extensions=['.jpg', '.jpeg', '.png']):
     try:
         files_and_dirs = os.listdir(directory)
-        filenames = [directory + f for f in files_and_dirs if os.path.isfile(os.path.join(directory, f))]
+        filenames = [
+            os.path.join(directory, f) for f in files_and_dirs 
+            if os.path.isfile(os.path.join(directory, f)) and os.path.splitext(f)[1].lower() in valid_extensions
+        ]
         return filenames
     except FileNotFoundError:
         print(f"The directory {directory} was not found.")
@@ -133,25 +149,25 @@ def main():
     
     target_video_path = "input/" + baseline
     reference_video_path = "input/" + l2
+    test_prompt = "a dog is running"
+    print("test prompt: ", test_prompt)
     
     target_output_dir = 'output/target/'
-    # extract_random_frames(target_video_path, target_output_dir)
+    print("target video path: ", target_video_path)
     extract_frames_every_half_second(target_video_path, target_output_dir)
     
+    print("reference video path: ", reference_video_path)
     reference_output_dir = 'output/reference/'
-    # extract_random_frames(reference_video_path, reference_output_dir)
     extract_frames_every_half_second(reference_video_path, reference_output_dir)
     
     target_image_paths = get_filenames(target_output_dir)
     reference_image_paths = get_filenames(reference_output_dir)  # Assuming the same number of images in each set
-    # print("target files: ", target_image_paths)
-    # print("reference files: ", reference_image_paths)
-    
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, preprocess = clip.load("ViT-B/32", device=device)
     inception_model = inception_v3(pretrained=True).to(device)
     
-    clip_score = calculate_clip_score(target_image_paths[0], model, preprocess)
+    clip_score = calculate_clip_scores(target_output_dir, model, preprocess, text=test_prompt)
     print(f"CLIP Score: {clip_score}")
 
     fid_score = calculate_fid_score(target_image_paths, reference_image_paths, inception_model, device)
