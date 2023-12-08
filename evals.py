@@ -1,13 +1,20 @@
 import torch
 import clip
 import numpy as np
+from functools import partial
 from PIL import Image
 import torchvision.transforms as transforms
 from torchvision.models import inception_v3 
 from scipy import linalg
+from datetime import timedelta
 from moviepy.editor import VideoFileClip
+from torchmetrics.image.fid import FrechetInceptionDistance
+from torchmetrics.functional.multimodal import clip_score
+import glob
 import random
 import os
+import clip
+import argparse
 
 def load_and_preprocess_image(image_path, metric="CLIP"):
     if metric == "FID":
@@ -28,9 +35,6 @@ def inception_features(images, inception_model):
     inception_model.eval()
     with torch.no_grad():
         return inception_model(images).detach().cpu().numpy()
-
-import torch
-import numpy as np
 
 def calculate_clip_scores(directory, model, preprocess, text="a photo"):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -60,26 +64,36 @@ def calculate_clip_scores(directory, model, preprocess, text="a photo"):
     average_score = np.mean(scores)
     return average_score
 
+def load_and_preprocess_image_for_fid(image_path):
+    image = Image.open(image_path).convert("RGB")
+    # resize the image for Inception model (which is used in FID calculation)
+    # use Image.Resampling.LANCZOS for high-quality downsampling
+    image = image.resize((299, 299), Image.Resampling.LANCZOS)
+    image_np = np.array(image)
+    image_tensor = torch.from_numpy(image_np).permute(2, 0, 1)  # Change shape from HWC to CHW
+    image_tensor = image_tensor.type(torch.uint8)
+    return image_tensor
+
 def calculate_fid_score(image_paths1, image_paths2, inception_model, device):
-    # Process and extract features for the first set of images
+    # process and extract features for the first set of images
     features1 = []
     for image_path in image_paths1:
         image = load_and_preprocess_image(image_path, "FID").to(device)
         features1.append(inception_features(image, inception_model))
     features1 = np.concatenate(features1, axis=0)
 
-    # Process and extract features for the second set of images
+    # process and extract features for the second set of images
     features2 = []
     for image_path in image_paths2:
         image = load_and_preprocess_image(image_path, "FID").to(device)
         features2.append(inception_features(image, inception_model))
     features2 = np.concatenate(features2, axis=0)
 
-    # Calculate mean and covariance for both sets of features
+    # calc mean and covariance for both sets of features
     mu1, sigma1 = np.mean(features1, axis=0), np.cov(features1, rowvar=False)
     mu2, sigma2 = np.mean(features2, axis=0), np.cov(features2, rowvar=False)
 
-    # Calculate FID
+    # calc FID
     ssdiff = np.sum((mu1 - mu2) ** 2)
     covmean = linalg.sqrtm(sigma1.dot(sigma2))
     if np.iscomplexobj(covmean):
@@ -87,6 +101,21 @@ def calculate_fid_score(image_paths1, image_paths2, inception_model, device):
 
     fid = ssdiff + np.trace(sigma1 + sigma2 - 2 * covmean)
     return fid
+
+def calculate_fid_score_with_torchmetrics(image_paths1, image_paths2):
+    fid = FrechetInceptionDistance(feature=2048)
+    # process images and update FID for the first set
+    for image_path in image_paths1:
+        image = load_and_preprocess_image_for_fid(image_path)
+        fid.update(image.unsqueeze(0), real=True)  # Unsqueeze to add batch dimension
+    # process images and update FID for the second set
+    for image_path in image_paths2:
+        image = load_and_preprocess_image_for_fid(image_path)
+        fid.update(image.unsqueeze(0), real=False)  # Unsqueeze to add batch dimension
+    # compute FID score
+    fid_score = fid.compute()
+    # convert from tensor to Python float
+    return fid_score.item()  
 
 def extract_random_frames(video_path, output_dir, num_frames=10):
     if not os.path.exists(output_dir):
@@ -105,7 +134,7 @@ def extract_random_frames(video_path, output_dir, num_frames=10):
         clip.save_frame(output_file_path, t=time)
         # print(f"Frame {i} (at time {time}s) written to {output_file_path}")
 
-def extract_frames_every_half_second(video_path, output_dir, sample_rate=10):
+def extract_frames_every_half_second(video_path, output_dir, r=0, sample_rate=10):
     # sample rate is the number of frames taken per second
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -114,15 +143,19 @@ def extract_frames_every_half_second(video_path, output_dir, sample_rate=10):
     duration = clip.duration
 
     # generate times at intervals
-    sr = 1/sample_rate
-    times = [i * (sr) for i in range(int(duration / sr))]
+    sr = 1 / sample_rate
+    times = [i * sr for i in range(int(duration / sr))]
 
     for i, time in enumerate(times):
+        # Format the time into a readable timestamp (hours, minutes, seconds)
+        timestamp = str(timedelta(seconds=round(time)))
+        
         # extract the frame at the specified time
         frame = clip.get_frame(time)
-        output_file_path = os.path.join(output_dir, f'frame_{i}.jpeg')
+        # Include the timestamp in the output file name
+        output_file_path = os.path.join(output_dir, f'frame_{i}_{timestamp}_{r}.jpeg')
         clip.save_frame(output_file_path, t=time)
-        # print(f"Frame {i} (at time {time}s) written to {output_file_path}")
+        # print(f"Frame {i} (at time {time}s, timestamp {timestamp}) written to {output_file_path}")
 
 def get_filenames(directory, valid_extensions=['.jpg', '.jpeg', '.png']):
     try:
@@ -140,26 +173,36 @@ def get_filenames(directory, valid_extensions=['.jpg', '.jpeg', '.png']):
         return []
 
 def main():
-    
-    # TODO: add real = ".mp4"
-    baseline = "A dog is running_dog_benchmark_1701400404_900 7c814e22.mp4"
-    unique_token = "A dog is running_unique_token_dog_only_1701671770_900 1aa49d2e.mp4"
-    l1 = "A dog is running_dog_unique_token_class_preservation_loss_1701399359_900 245d7438.mp4"
-    l2 = "A dog is running_unique-token-class-preservation-loss-lambda-0_31701406141_900 679852e4.mp4"
-    
-    target_video_path = "input/" + baseline
-    reference_video_path = "input/" + l2
+
+    parser = argparse.ArgumentParser(description='Process video paths.')
+    parser.add_argument('target_video_path', type=str, help='The path to the target video')
+    parser.add_argument('reference_video_path', type=str, help='The path to the reference video')
+    args = parser.parse_args()
+
+    target_video_path = args.target_video_path
+    reference_video_path = args.reference_video_path
+
+    # retrieve all video files from the target and reference directories
+    target_video_paths = glob.glob(os.path.join(target_video_path, '*.mp4')) # Adjust the extension if needed
+    reference_video_paths = glob.glob(os.path.join(reference_video_path, '*.mp4')) # Adjust the extension if needed
+
+    i = 0
+    for target_video_path in target_video_paths:
+        target_output_dir = os.path.join('output/target', os.path.basename(target_video_path).split('.')[0])
+        print("target video path: ", target_video_path)
+        extract_frames_every_half_second(target_video_path, 'output/target', i)
+        i += 1
+
+    i = 0
+    for reference_video_path in reference_video_paths:
+        reference_output_dir = os.path.join('output/reference', os.path.basename(reference_video_path).split('.')[0])
+        print("reference video path: ", reference_video_path)
+        extract_frames_every_half_second(reference_video_path, 'output/reference', i)
+        i += 1
+        
     test_prompt = "a dog is running"
     print("test prompt: ", test_prompt)
-    
-    target_output_dir = 'output/target/'
-    print("target video path: ", target_video_path)
-    extract_frames_every_half_second(target_video_path, target_output_dir)
-    
-    print("reference video path: ", reference_video_path)
-    reference_output_dir = 'output/reference/'
-    extract_frames_every_half_second(reference_video_path, reference_output_dir)
-    
+    target_output_dir, reference_output_dir = "output/target", "output/reference"
     target_image_paths = get_filenames(target_output_dir)
     reference_image_paths = get_filenames(reference_output_dir)  # Assuming the same number of images in each set
 
@@ -168,10 +211,16 @@ def main():
     inception_model = inception_v3(pretrained=True).to(device)
     
     clip_score = calculate_clip_scores(target_output_dir, model, preprocess, text=test_prompt)
-    print(f"CLIP Score: {clip_score}")
+    print(f"CLIP Score (ours): {clip_score}")
 
-    fid_score = calculate_fid_score(target_image_paths, reference_image_paths, inception_model, device)
-    print(f"FID Score: {fid_score}")
+    # clip_score_torch = calculate_clip_scores_with_torchmetrics(target_output_dir, model, preprocess, text=test_prompt)
+    # print(f"CLIP Score (torch): {clip_score_torch}")
 
+    fid_score_ours = calculate_fid_score(target_image_paths, reference_image_paths, inception_model, device)
+    print(f"FID Score (ours): {fid_score_ours}")
+
+    fid_score_torch = calculate_fid_score_with_torchmetrics(target_image_paths, reference_image_paths)
+    print(f"FID Score (torch): {fid_score_torch}")
+    
 if __name__ == "__main__":
     main()
