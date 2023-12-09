@@ -92,7 +92,8 @@ def calculate_fid_score(image_paths1, image_paths2, inception_model, device):
     # calc mean and covariance for both sets of features
     mu1, sigma1 = np.mean(features1, axis=0), np.cov(features1, rowvar=False)
     mu2, sigma2 = np.mean(features2, axis=0), np.cov(features2, rowvar=False)
-
+    features1, features2 = None, None  # free memory
+    
     # calc FID
     ssdiff = np.sum((mu1 - mu2) ** 2)
     covmean = linalg.sqrtm(sigma1.dot(sigma2))
@@ -174,13 +175,14 @@ def get_filenames(directory, valid_extensions=['.jpg', '.jpeg', '.png']):
 
 def main():
 
-    parser = argparse.ArgumentParser(description='Process video paths.')
+    parser = argparse.ArgumentParser(description='Process video paths and text prompt.')
     parser.add_argument('target_video_path', type=str, help='The path to the target video')
     parser.add_argument('reference_video_path', type=str, help='The path to the reference video')
+    parser.add_argument('test_prompt', type=str, help='Text prompt for CLIP score calculation')
     args = parser.parse_args()
-
     target_video_path = args.target_video_path
     reference_video_path = args.reference_video_path
+    test_prompt = args.test_prompt
 
     # retrieve all video files from the target and reference directories
     target_video_paths = glob.glob(os.path.join(target_video_path, '*.mp4')) # Adjust the extension if needed
@@ -200,7 +202,6 @@ def main():
         extract_frames_every_half_second(reference_video_path, 'output/reference', i)
         i += 1
         
-    test_prompt = "a dog is running"
     print("test prompt: ", test_prompt)
     target_output_dir, reference_output_dir = "output/target", "output/reference"
     target_image_paths = get_filenames(target_output_dir)
@@ -216,10 +217,10 @@ def main():
     # clip_score_torch = calculate_clip_scores_with_torchmetrics(target_output_dir, model, preprocess, text=test_prompt)
     # print(f"CLIP Score (torch): {clip_score_torch}")
 
-    fid_score_ours = calculate_fid_score(target_image_paths, reference_image_paths, inception_model, device)
-    print(f"FID Score (ours): {fid_score_ours}")
+    # fid_score_ours = calculate_fid_score(reference_image_paths, target_image_paths, inception_model, device)
+    # print(f"FID Score (ours): {fid_score_ours}")
 
-    fid_score_torch = calculate_fid_score_with_torchmetrics(target_image_paths, reference_image_paths)
+    fid_score_torch = calculate_fid_score_with_torchmetrics(reference_image_paths, target_image_paths)
     print(f"FID Score (torch): {fid_score_torch}")
     
 if __name__ == "__main__":
