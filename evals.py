@@ -13,6 +13,7 @@ from torchmetrics.functional.multimodal import clip_score
 import glob
 import random
 import os
+import io
 import clip
 import argparse
 
@@ -173,6 +174,31 @@ def get_filenames(directory, valid_extensions=['.jpg', '.jpeg', '.png']):
         print(f"An error occurred: {e}")
         return []
 
+def estimate_compressibility(directory):
+    total_compressibility = 0
+    jpeg_count = 0
+    # iterate through all files in the directory
+    for filename in os.listdir(directory):
+        if filename.lower().endswith(".jpg") or filename.lower().endswith(".jpeg"):
+            image_path = os.path.join(directory, filename)
+            with Image.open(image_path) as img:
+                # save the image to a bytes buffer at 50% quality
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG', quality=50)
+                compressed_size = buf.tell()
+                # get the original file size
+                original_size = os.path.getsize(image_path)
+                # calculate the ratio of compressed size to original size
+                compressibility = compressed_size / original_size
+                total_compressibility += compressibility
+                jpeg_count += 1
+    # calculate average compressibility
+    if jpeg_count > 0:
+        average_compressibility = total_compressibility / jpeg_count
+        return average_compressibility
+    else:
+        return None
+
 def main():
 
     parser = argparse.ArgumentParser(description='Process video paths and text prompt.')
@@ -223,5 +249,11 @@ def main():
     fid_score_torch = calculate_fid_score_with_torchmetrics(reference_image_paths, target_image_paths)
     print(f"FID Score (torch): {fid_score_torch}")
     
+    average_compressibility = estimate_compressibility(target_output_dir)
+    if average_compressibility is not None:
+        print(f"Average compressibility: {average_compressibility}")
+    else:
+        print("No JPEG images found in the directory.")
+
 if __name__ == "__main__":
     main()
