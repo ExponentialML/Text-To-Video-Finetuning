@@ -13,6 +13,19 @@
 # Text-To-Video-Finetuning
 ## Finetune ModelScope's Text To Video model using Diffusers 🧨 
 
+## Important Update **2023-14-12**
+First of all a note from me. Thank you guys for your support, feedback, and journey through discovering the nascent, innate potential of video Diffusion Models.
+
+@damo-vilab Has released a repository for finetuning all things Video Diffusion Models, and I recommend their implementation over this repository.
+https://github.com/damo-vilab/i2vgen-xl
+
+https://github.com/ExponentialML/Text-To-Video-Finetuning/assets/59846140/55608f6a-333a-458f-b7d5-94461c5da8bb
+
+This repository will no longer be updated, but will instead be archived for researchers & builders that wish to bootstrap their projects. 
+I will be leaving the issues, pull requests, and all related things for posterity purposes.
+
+Thanks again!
+
 ### Updates
 - **2023-7-12**: You can now train a LoRA that is compatibile with the [webui extension](https://github.com/kabachuha/sd-webui-text2video)! See instructions [here.](https://github.com/ExponentialML/Text-To-Video-Finetuning#training-a-lora)
 - **2023-4-17**: You can now convert your trained models from diffusers to `.ckpt` format for A111 webui. Thanks @kabachuha!  
