@@ -13,7 +13,7 @@
 # Text-To-Video-Finetuning
 ## Finetune ModelScope's Text To Video model using Diffusers 🧨 
 
-## Important Update **2023-14-12**
+## Important Update **2023-12-14**
 First of all a note from me. Thank you guys for your support, feedback, and journey through discovering the nascent, innate potential of video Diffusion Models.
 
 @damo-vilab Has released a repository for finetuning all things Video Diffusion Models, and I recommend their implementation over this repository.
