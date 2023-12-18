@@ -25,6 +25,7 @@ from tqdm.auto import tqdm
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
+from torch.utils.tensorboard import SummaryWriter
 
 from models.unet_3d_condition import UNet3DConditionModel
 from diffusers.models import AutoencoderKL
@@ -716,6 +717,7 @@ def main(
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
+    writer = SummaryWriter()
 
     def finetune_unet(batch, train_encoder=False):
         nonlocal use_offset_noise
@@ -959,6 +961,7 @@ def main(
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             accelerator.log({"training_loss": loss.detach().item()}, step=step)
+            writer.add_scalar('Loss/train', loss.detach().item(), global_step)
             progress_bar.set_postfix(**logs)
 
             if global_step >= max_train_steps:

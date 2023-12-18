@@ -1,11 +1,11 @@
-accelerate==0.19
+accelerate==0.20.3
 torch
 torchvision
 torchaudio
 git+https://github.com/huggingface/diffusers.git
 git+https://github.com/cloneofsimo/lora.git
 git+https://github.com/microsoft/LoRA
-transformers
+transformers==4.34.0
 einops
 decord
 tqdm
@@ -14,3 +14,9 @@ omegaconf
 opencv-python
 pydantic
 compel
+tensorboard
+pytest
+clip==1.0
+Pillow
+scipy
+
